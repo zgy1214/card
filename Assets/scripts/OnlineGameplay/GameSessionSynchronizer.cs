@@ -19,23 +19,9 @@ public sealed class GameSessionSynchronizer
         _gameSession.ApplyMatchStart(networkMatchStartPayload.match_id);
     }
 
-    public void ApplyMatchState(NetworkMatchStatePayload networkMatchStatePayload)
+    public void ApplyGameState(NetworkGameStatePayload networkGameStatePayload)
     {
-        _gameSession.ApplyMatchState(networkMatchStatePayload);
+        _gameSession.ApplyGameState(networkGameStatePayload);
     }
 
-    public void ApplyTurnStart(NetworkTurnStartPayload networkTurnStartPayload)
-    {
-        _gameSession.ApplyTurnStart(networkTurnStartPayload);
-    }
-
-    public void ApplyCardPlayed(NetworkCardPlayedPayload networkCardPlayedPayload)
-    {
-        _gameSession.ApplyCardPlayed(networkCardPlayedPayload);
-    }
-
-    public void ApplyMatchEnd(NetworkMatchEndPayload networkMatchEndPayload)
-    {
-        _gameSession.ApplyMatchEnd(networkMatchEndPayload);
-    }
 }

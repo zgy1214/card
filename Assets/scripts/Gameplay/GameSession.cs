@@ -5,6 +5,7 @@ using System.Linq;
 public sealed class GameSession
 {
     private readonly List<PlayerRuntime> _gamePlayerRuntimes = new List<PlayerRuntime>();
+    private float _phaseTimerElapsedTime;
 
     public bool IsRunning { get; private set; }
     public string MatchId { get; private set; }
@@ -12,16 +13,23 @@ public sealed class GameSession
     public string LocalPlayerId { get; private set; }
     public int LocalSeatIndex { get; private set; } = -1;
     public IReadOnlyList<PlayerRuntime> GamePlayerRuntimes => _gamePlayerRuntimes;
-    public TurnManager GameTurnManager { get; private set; }
-    public CardDefinition CurrentPlayedCardDefinition { get; private set; }
-    public int CurrentPlayedSeatIndex { get; private set; } = -1;
-    public int WinnerSeatIndex { get; private set; } = -1;
     public bool IsFinished => string.Equals(MatchStatus, "finished", StringComparison.Ordinal);
+    public string Phase { get; private set; }
+    public int RoundIndex { get; private set; }
+    public double ServerTime { get; private set; }
+    public double PhaseEndTime { get; private set; }
+    public double StateReceivedRealtime { get; private set; }
+    public NetworkGameStatePlayerPayload[] GameStatePlayers { get; private set; }
+    public NetworkLocalPlayerPrivatePayload LocalPlayerPrivate { get; private set; }
+    public NetworkRoundPublicPayload RoundPublic { get; private set; }
+    public NetworkChallengeStatePayload ChallengeState { get; private set; }
+    public NetworkShowdownStatePayload ShowdownState { get; private set; }
+    public NetworkFortuneStatePayload FortuneState { get; private set; }
+    public NetworkFinalResultPayload FinalResult { get; private set; }
 
     public event Action GameStarted;
     public event Action MatchStateUpdated;
-    public event Action<PlayerRuntime, CardDefinition> HandCardPlayed;
-    public event Action MatchEnded;
+    public event Action PhaseTimerTicked;
 
     public void Initialize(IEnumerable<PlayerRuntime> gamePlayerRuntimes)
     {
@@ -46,21 +54,38 @@ public sealed class GameSession
             throw new ArgumentException("At least one player runtime is required.", nameof(gamePlayerRuntimes));
         }
 
-        GameTurnManager = new TurnManager(_gamePlayerRuntimes);
-        GameTurnManager.Initialize();
         ResetMatchState();
     }
 
     public void Shutdown()
     {
         ResetMatchState();
-        GameTurnManager = null;
         _gamePlayerRuntimes.Clear();
     }
 
     public void Tick(float deltaTime)
     {
-        GameTurnManager?.Tick(deltaTime);
+        TickPhaseTimer(deltaTime);
+    }
+
+    private void TickPhaseTimer(float deltaTime)
+    {
+        if (PhaseEndTime <= 0)
+        {
+            return;
+        }
+
+        if (deltaTime < 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(deltaTime), deltaTime, "Delta time cannot be negative.");
+        }
+
+        _phaseTimerElapsedTime += deltaTime;
+        while (_phaseTimerElapsedTime >= 1f)
+        {
+            _phaseTimerElapsedTime -= 1f;
+            PhaseTimerTicked?.Invoke();
+        }
     }
 
     public void SetLocalPlayerId(string localPlayerId)
@@ -88,132 +113,36 @@ public sealed class GameSession
 
         MatchId = matchId;
         MatchStatus = "playing";
-        WinnerSeatIndex = -1;
         IsRunning = true;
-        CurrentPlayedCardDefinition = null;
-        CurrentPlayedSeatIndex = -1;
-        GameTurnManager?.Initialize();
         GameStarted?.Invoke();
     }
 
-    public void ApplyMatchState(NetworkMatchStatePayload networkMatchStatePayload)
+    public void ApplyGameState(NetworkGameStatePayload networkGameStatePayload)
     {
-        if (networkMatchStatePayload == null)
+        if (networkGameStatePayload == null)
         {
-            throw new ArgumentNullException(nameof(networkMatchStatePayload));
+            throw new ArgumentNullException(nameof(networkGameStatePayload));
         }
 
-        if (string.IsNullOrEmpty(MatchId))
-        {
-            MatchId = networkMatchStatePayload.match_id;
-        }
+        MatchId = networkGameStatePayload.match_id;
+        MatchStatus = networkGameStatePayload.match_status;
+        Phase = networkGameStatePayload.phase;
+        RoundIndex = networkGameStatePayload.round_index;
+        ServerTime = networkGameStatePayload.server_time;
+        PhaseEndTime = networkGameStatePayload.phase_end_time;
+        StateReceivedRealtime = UnityEngine.Time.realtimeSinceStartupAsDouble;
+        _phaseTimerElapsedTime = 0f;
+        GameStatePlayers = networkGameStatePayload.players ?? Array.Empty<NetworkGameStatePlayerPayload>();
+        LocalPlayerPrivate = networkGameStatePayload.local_player_private;
+        RoundPublic = networkGameStatePayload.round_public;
+        ChallengeState = networkGameStatePayload.challenge_state;
+        ShowdownState = networkGameStatePayload.showdown_state;
+        FortuneState = networkGameStatePayload.fortune_state;
+        FinalResult = networkGameStatePayload.final_result;
 
-        MatchStatus = networkMatchStatePayload.match_status;
-        if (networkMatchStatePayload.current_played_card != null
-            && networkMatchStatePayload.current_played_card.HasValue())
-        {
-            CurrentPlayedCardDefinition = networkMatchStatePayload.current_played_card.ToCardDefinition();
-        }
-        else
-        {
-            CurrentPlayedCardDefinition = null;
-            CurrentPlayedSeatIndex = -1;
-        }
-
-        if (networkMatchStatePayload.players == null)
-        {
-            throw new InvalidOperationException("Match state players payload cannot be null.");
-        }
-
-        SynchronizePlayers(networkMatchStatePayload.players);
-        foreach (NetworkPlayerStatePayload networkPlayerStatePayload in networkMatchStatePayload.players)
-        {
-            if (networkPlayerStatePayload == null)
-            {
-                continue;
-            }
-
-            PlayerRuntime gamePlayerRuntime = GetPlayerRuntime(networkPlayerStatePayload.seat_index);
-            if (gamePlayerRuntime == null)
-            {
-                throw new InvalidOperationException($"Cannot find player runtime for seat index: {networkPlayerStatePayload.seat_index}");
-            }
-
-            List<CardDefinition> handCardDefinitions = new List<CardDefinition>();
-            if (networkPlayerStatePayload.hand_cards != null)
-            {
-                foreach (NetworkCardPayload networkCardPayload in networkPlayerStatePayload.hand_cards)
-                {
-                    if (networkCardPayload == null || !networkCardPayload.HasValue())
-                    {
-                        continue;
-                    }
-
-                    handCardDefinitions.Add(networkCardPayload.ToCardDefinition());
-                }
-            }
-
-            gamePlayerRuntime.SetHandState(handCardDefinitions, networkPlayerStatePayload.hand_count);
-        }
-
-        EnsureTurnManager();
-        GameTurnManager?.Synchronize(networkMatchStatePayload.turn, networkMatchStatePayload.current_seat_index);
+        SynchronizeGameStatePlayers(GameStatePlayers, LocalPlayerPrivate);
         IsRunning = !IsFinished;
         MatchStateUpdated?.Invoke();
-    }
-
-    public void ApplyTurnStart(NetworkTurnStartPayload networkTurnStartPayload)
-    {
-        if (networkTurnStartPayload == null)
-        {
-            throw new ArgumentNullException(nameof(networkTurnStartPayload));
-        }
-
-        MatchStatus = "playing";
-        IsRunning = true;
-        EnsureTurnManager();
-        GameTurnManager?.ApplyTurnStart(
-            networkTurnStartPayload.turn,
-            networkTurnStartPayload.current_seat_index,
-            networkTurnStartPayload.remaining_seconds);
-    }
-
-    public void ApplyCardPlayed(NetworkCardPlayedPayload networkCardPlayedPayload)
-    {
-        if (networkCardPlayedPayload == null)
-        {
-            throw new ArgumentNullException(nameof(networkCardPlayedPayload));
-        }
-
-        if (networkCardPlayedPayload.card == null || !networkCardPlayedPayload.card.HasValue())
-        {
-            throw new InvalidOperationException("Played card payload is missing card data.");
-        }
-
-        PlayerRuntime gamePlayerRuntime = GetPlayerRuntime(networkCardPlayedPayload.seat_index);
-        if (gamePlayerRuntime == null)
-        {
-            throw new InvalidOperationException($"Cannot find player runtime for seat index: {networkCardPlayedPayload.seat_index}");
-        }
-
-        CardDefinition playedCardDefinition = networkCardPlayedPayload.card.ToCardDefinition();
-        CurrentPlayedCardDefinition = playedCardDefinition;
-        CurrentPlayedSeatIndex = networkCardPlayedPayload.seat_index;
-        HandCardPlayed?.Invoke(gamePlayerRuntime, playedCardDefinition);
-    }
-
-    public void ApplyMatchEnd(NetworkMatchEndPayload networkMatchEndPayload)
-    {
-        if (networkMatchEndPayload == null)
-        {
-            throw new ArgumentNullException(nameof(networkMatchEndPayload));
-        }
-
-        MatchStatus = networkMatchEndPayload.match_status;
-        WinnerSeatIndex = networkMatchEndPayload.winner_seat_index;
-        IsRunning = false;
-        GameTurnManager?.Finish();
-        MatchEnded?.Invoke();
     }
 
     public PlayerRuntime GetDisplayPlayerRuntime(int displayIndex)
@@ -255,10 +184,12 @@ public sealed class GameSession
         return (seatPlayerIndex - localPlayerIndex + _gamePlayerRuntimes.Count) % _gamePlayerRuntimes.Count;
     }
 
-    private void SynchronizePlayers(NetworkPlayerStatePayload[] playerPayloads)
+    private void SynchronizeGameStatePlayers(
+        NetworkGameStatePlayerPayload[] playerPayloads,
+        NetworkLocalPlayerPrivatePayload localPlayerPrivatePayload)
     {
         _gamePlayerRuntimes.Clear();
-        foreach (NetworkPlayerStatePayload playerPayload in playerPayloads)
+        foreach (NetworkGameStatePlayerPayload playerPayload in playerPayloads)
         {
             if (playerPayload == null || playerPayload.seat_index < 0)
             {
@@ -269,13 +200,27 @@ public sealed class GameSession
             PlayerRuntime playerRuntime = new PlayerRuntime(
                 string.IsNullOrEmpty(playerPayload.player_id) ? $"seat_{playerPayload.seat_index}" : playerPayload.player_id,
                 playerPayload.seat_index,
-                isLocalPlayer,
-                1);
+                isLocalPlayer);
             playerRuntime.SetNetworkIdentity(
                 playerRuntime.PlayerId,
                 playerPayload.name,
                 playerPayload.player_type,
-                isLocalPlayer);
+                isLocalPlayer,
+                playerPayload.character_id);
+
+            List<CardDefinition> handCards = new List<CardDefinition>();
+            if (isLocalPlayer && localPlayerPrivatePayload?.hand_cards != null)
+            {
+                foreach (NetworkCardPayload cardPayload in localPlayerPrivatePayload.hand_cards)
+                {
+                    if (cardPayload != null && cardPayload.HasValue())
+                    {
+                        handCards.Add(cardPayload.ToCardDefinition());
+                    }
+                }
+            }
+
+            playerRuntime.SetHandState(handCards, playerPayload.hand_count);
             _gamePlayerRuntimes.Add(playerRuntime);
         }
 
@@ -289,31 +234,28 @@ public sealed class GameSession
         LocalSeatIndex = localPlayerRuntime == null ? -1 : localPlayerRuntime.SeatIndex;
     }
 
-    private void EnsureTurnManager()
-    {
-        if (GameTurnManager != null || _gamePlayerRuntimes.Count == 0)
-        {
-            return;
-        }
-
-        GameTurnManager = new TurnManager(_gamePlayerRuntimes);
-        GameTurnManager.Initialize();
-    }
-
     private void ResetMatchState()
     {
         MatchId = null;
         MatchStatus = null;
-        CurrentPlayedCardDefinition = null;
-        CurrentPlayedSeatIndex = -1;
-        WinnerSeatIndex = -1;
+        Phase = null;
+        RoundIndex = 0;
+        ServerTime = 0;
+        PhaseEndTime = 0;
+        StateReceivedRealtime = 0;
+        _phaseTimerElapsedTime = 0f;
+        GameStatePlayers = Array.Empty<NetworkGameStatePlayerPayload>();
+        LocalPlayerPrivate = null;
+        RoundPublic = null;
+        ChallengeState = null;
+        ShowdownState = null;
+        FortuneState = null;
+        FinalResult = null;
         IsRunning = false;
         LocalSeatIndex = -1;
         foreach (PlayerRuntime gamePlayerRuntime in _gamePlayerRuntimes)
         {
             gamePlayerRuntime.ClearHandCards();
         }
-
-        GameTurnManager?.Initialize();
     }
 }

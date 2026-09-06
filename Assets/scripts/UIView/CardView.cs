@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public sealed class CardView : UIScript
 {
@@ -28,6 +29,19 @@ public sealed class CardView : UIScript
             throw new System.InvalidOperationException("CardView cannot find TMP_Text on card_name.");
         }
 
-        gameCardNameText.text = gameCardViewArg.CardName;
+        Transform faceTransform = ViewTransform.Find("img_card_face");
+        gameCardNameText.gameObject.SetActive(false);
+
+        if (faceTransform != null)
+        {
+            Image faceImage = faceTransform.GetComponent<Image>();
+            CardArtLibrary cardArtLibrary = ViewGameObject.GetComponentInParent<CardArtLibrary>();
+            Sprite sprite = cardArtLibrary?.GetFaceSprite(gameCardViewArg.CardName);
+            if (faceImage != null && sprite != null)
+            {
+                faceImage.sprite = sprite;
+                faceImage.color = Color.white;
+            }
+        }
     }
 }

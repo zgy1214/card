@@ -1,8 +1,9 @@
 public sealed class CardViewArg : Arg
 {
     public string CardName { get; }
+    public int Rank { get; }
 
-    public CardViewArg(string cardName)
+    public CardViewArg(string cardName, int rank)
     {
         if (string.IsNullOrEmpty(cardName))
         {
@@ -10,5 +11,6 @@ public sealed class CardViewArg : Arg
         }
 
         CardName = cardName;
+        Rank = rank;
     }
 }

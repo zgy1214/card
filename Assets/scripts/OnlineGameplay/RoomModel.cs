@@ -10,7 +10,7 @@ public sealed class RoomModel
     public string Name { get; private set; }
     public string Status { get; private set; }
     public string OwnerPlayerId { get; private set; }
-    public int MaxPlayers { get; private set; } = 3;
+    public int MaxPlayers { get; private set; } = 4;
     public IReadOnlyList<RoomPlayerSnapshot> Players => _players;
     public bool HasRoom => !string.IsNullOrEmpty(RoomId);
 
@@ -44,6 +44,7 @@ public sealed class RoomModel
                     playerPayload.seat_index,
                     playerPayload.player_id,
                     playerPayload.name,
+                    string.IsNullOrEmpty(playerPayload.character_id) ? "character_1" : playerPayload.character_id,
                     playerPayload.player_type,
                     playerPayload.is_owner,
                     playerPayload.is_ready));
@@ -65,7 +66,7 @@ public sealed class RoomModel
         Name = null;
         Status = null;
         OwnerPlayerId = null;
-        MaxPlayers = 3;
+        MaxPlayers = 4;
         _players.Clear();
         RoomCleared?.Invoke();
     }
@@ -119,6 +120,11 @@ public sealed class RoomModel
         return true;
     }
 
+    public bool CanLocalAddAI(string localPlayerId)
+    {
+        return IsLocalOwner(localPlayerId) && !IsFull();
+    }
+
     public bool IsFull()
     {
         return _players.Count >= MaxPlayers;
@@ -130,6 +136,7 @@ public sealed class RoomPlayerSnapshot
     public int SeatIndex { get; }
     public string PlayerId { get; }
     public string Name { get; }
+    public string CharacterId { get; }
     public string PlayerType { get; }
     public bool IsOwner { get; }
     public bool IsReady { get; }
@@ -140,6 +147,7 @@ public sealed class RoomPlayerSnapshot
         int seatIndex,
         string playerId,
         string name,
+        string characterId,
         string playerType,
         bool isOwner,
         bool isReady)
@@ -147,6 +155,7 @@ public sealed class RoomPlayerSnapshot
         SeatIndex = seatIndex;
         PlayerId = playerId;
         Name = name;
+        CharacterId = string.IsNullOrEmpty(characterId) ? "character_1" : characterId;
         PlayerType = playerType;
         IsOwner = isOwner;
         IsReady = isReady;

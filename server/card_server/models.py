@@ -17,11 +17,13 @@ ROOM_STATUS_PLAYING = "playing"
 class Card:
     card_id: str
     card_name: str
+    rank: int = 0
 
-    def to_payload(self) -> dict[str, str]:
+    def to_payload(self) -> dict[str, object]:
         return {
             "card_id": self.card_id,
             "card_name": self.card_name,
+            "rank": self.rank,
         }
 
 
@@ -31,6 +33,7 @@ class PlayerState:
     player_id: str
     name: str
     player_type: str
+    character_id: str = "character_1"
     hand_cards: list[Card] = field(default_factory=list)
 
     @property
@@ -43,6 +46,7 @@ class PlayerState:
             "player_id": self.player_id,
             "name": self.name,
             "player_type": self.player_type,
+            "character_id": self.character_id,
             "hand_count": self.hand_count,
             "hand_cards": [card.to_payload() for card in self.hand_cards] if include_hand_cards else [],
         }
@@ -56,11 +60,15 @@ class PlayerState:
         self.name = ai_name
         self.player_type = PLAYER_TYPE_AI
 
+    def sort_hand_cards(self) -> None:
+        self.hand_cards.sort(key=lambda card: (card.rank, card.card_id))
+
 
 @dataclass
 class PlayerRecord:
     player_id: str
     name: str
+    character_id: str = "character_1"
     status: str = PLAYER_STATUS_IDLE
     room_id: str | None = None
     match_id: str | None = None
@@ -70,6 +78,7 @@ class PlayerRecord:
             seat_index=seat_index,
             player_id=self.player_id,
             name=self.name,
+            character_id=self.character_id,
             player_type=PLAYER_TYPE_HUMAN,
             is_owner=is_owner,
             is_ready=False,
@@ -81,6 +90,7 @@ class RoomPlayer:
     seat_index: int
     player_id: str
     name: str
+    character_id: str
     player_type: str
     is_owner: bool = False
     is_ready: bool = False
@@ -98,6 +108,7 @@ class RoomPlayer:
             "seat_index": self.seat_index,
             "player_id": self.player_id,
             "name": self.name,
+            "character_id": self.character_id,
             "player_type": self.player_type,
             "is_owner": self.is_owner,
             "is_ready": self.is_ready,
@@ -109,7 +120,7 @@ class Room:
     room_id: str
     name: str
     owner_player_id: str
-    max_players: int = 3
+    max_players: int = 4
     status: str = ROOM_STATUS_WAITING
     players: list[RoomPlayer] = field(default_factory=list)
 

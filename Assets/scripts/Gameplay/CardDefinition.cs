@@ -4,9 +4,9 @@ public sealed class CardDefinition
 {
     public string CardId { get; }
     public string CardName { get; }
-    public int ManaCost { get; }
+    public int Rank { get; }
 
-    public CardDefinition(string cardId, string cardName, int manaCost)
+    public CardDefinition(string cardId, string cardName, int rank)
     {
         if (string.IsNullOrEmpty(cardId))
         {
@@ -18,13 +18,13 @@ public sealed class CardDefinition
             throw new ArgumentException("Card name cannot be null or empty.", nameof(cardName));
         }
 
-        if (manaCost < 0)
+        if (rank < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(manaCost), manaCost, "Mana cost cannot be negative.");
+            throw new ArgumentOutOfRangeException(nameof(rank), rank, "Card rank cannot be negative.");
         }
 
         CardId = cardId;
         CardName = cardName;
-        ManaCost = manaCost;
+        Rank = rank;
     }
 }

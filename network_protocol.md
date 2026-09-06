@@ -2,21 +2,20 @@
 
 ## 1. 目标
 
-当前版本实现一个轻量联机 demo：
+当前版本实现《溜小3》的 4 人联机闭环：
 
 - 全部在线通信使用 WebSocket。
-- 服务器是权威状态来源。
-- 客户端维护 `player_id` 和 `name`，服务器维护在线连接、玩家状态、房间、匹配队列和对局。
-- 支持大厅刷新房间列表、创建房间、通过房间号加入、房间 ready、房间内添加 AI。
-- 支持 FIFO 快速匹配，凑满真人后立即开局。
-- 支持游戏中玩家退出后由 AI 接管。
+- 服务端是权威状态来源，客户端只发送操作意图。
+- 房间固定 `max_players = 4`，支持真人和 AI。
+- 游戏中断线或主动离开时，未结算对局由 AI 接管该座位。
+- 结算页是一个可停留阶段，不再收到结算后自动回大厅。
 
 当前不处理：
 
 - 账号登录
 - 断线重连
-- 心跳业务协议
-- 复杂匹配评分
+- 房主自定义参数
+- 复杂 AI 策略
 - 多服务器扩展
 
 ## 2. 基础格式
@@ -32,585 +31,159 @@
 
 约定：
 
-- `type` 使用 `session/*`、`room/*`、`matchmaking/*`、`game/*` 分组。
+- `type` 使用 `session/*`、`profile/*`、`room/*`、`matchmaking/*`、`game/*` 分组。
 - `payload` 必须存在，没有内容时使用 `{}`。
 - 字段命名使用小写加下划线，例如 `player_id`、`room_id`。
-- 客户端只发送操作意图，关键状态必须等待服务器确认。
-- 服务端在关键状态变化后下发全量状态，例如 `room/state`、`game/match_state`。
+- 关键状态变化后，服务端下发完整快照，不做增量同步。
 
-## 3. 状态约定
+## 3. Gameplay 报文
 
-### 3.1 玩家主状态
+服务端推送：
 
-同一玩家同一时间只能处于一种主状态：
+```text
+game/match_start
+game/state
+game/chat
+game/player_replaced_by_ai
+error
+```
 
-- `idle`：空闲，可以匹配、建房、加入房间。
-- `matchmaking`：匹配中，不能建房或加入房间。
-- `room`：房间中，不能开始匹配。
-- `game`：游戏中，不能进入大厅房间流程。
+客户端请求：
 
-客户端和服务器都需要校验状态。服务器校验为准。
+```text
+game/submit_play
+game/submit_challenge
+game/submit_fortune_draw
+game/chat
+game/leave
+```
 
-### 3.2 标识符
+不使用 `game/cancel_play`。选牌、取消选中、切换明牌都属于客户端本地交互；只有点“确认出牌”才发送 `game/submit_play`。
 
-- `player_id`：客户端生成 UUID，写入本地存档。
-- `name`：客户端玩家名；首次无存档时生成类似 `player_A7K2`。
-- `room_id`：服务器生成 4 位数字字符串，只保证当前活跃房间内唯一。
-- `match_id`：服务器生成，对局唯一标识。
-- `seat_index`：座位编号，从 `0` 开始；当前默认 `max_players = 3`，后续可扩展。
-- `player_type`：`human` 或 `ai`。
+## 4. game/state
 
-### 3.3 房间规则
-
-- 房间有 `name`、`room_id`、房主、玩家列表、ready 状态。
-- 房主不能踢真人玩家。
-- 房主可以添加或移除 AI。
-- AI 占座位，不能成为房主。
-- 房主离开时自动转让给其他真人；没有真人时房间销毁。
-- 玩家进出、AI 增删、房主变化时清空真人 ready 状态。
-- 房主不需要 ready。
-- 开局条件：座位满、非房主真人 ready、房主发送 `room/start_game`。
-- 开局后房间从大厅列表隐藏。
-
-### 3.4 匹配规则
-
-- 当前只有一个 FIFO 队列。
-- 匹配只接受真人，不补 AI。
-- 队列人数变化时向队列内玩家推送 `matchmaking/state`。
-- 凑满 `required_count` 后立即创建对局。
-- 客户端取消匹配必须等待服务器确认。
-- 如果取消请求到达前已匹配成功，取消作废，客户端收到 `matchmaking/found` 后进入游戏。
-
-### 3.5 游戏规则
-
-当前仍使用简单轮流出牌 demo：
-
-- 使用一副 52 张牌。
-- 每个玩家开局 5 张手牌。
-- 每回合只能出 1 张牌。
-- 回合时长固定为 10 秒。
-- 超时未出牌时由服务器随机出牌。
-- 谁先出完手牌谁获胜。
-- 游戏中玩家主动退出或断线后，该座位由 AI 接管，对局继续。
-- 如果所有真人都离开，服务器可以直接销毁对局。
-
-## 4. 通用错误
-
-### `error`
-
-用途：通知本次操作失败。客户端第一版只需要 toast 提示，不自行推导状态。
+`game/state` 是对局主状态。服务端在开局、阶段切换、玩家提交、结算发生时推送。
 
 ```json
 {
-  "type": "error",
+  "type": "game/state",
   "payload": {
-    "scope": "room",
-    "code": "room_not_found",
-    "message": "Room not found."
-  }
-}
-```
-
-字段：
-
-- `scope`：错误所属模块，例如 `session`、`room`、`matchmaking`、`game`。
-- `code`：错误码。
-- `message`：可展示或可记录的错误说明。
-
-常用错误码：
-
-- `invalid_operation`
-- `duplicate_player`
-- `invalid_state`
-- `room_not_found`
-- `room_full`
-- `not_room_owner`
-- `not_ready`
-- `game_not_found`
-- `not_your_turn`
-- `card_not_in_hand`
-- `game_finished`
-
-## 5. Session
-
-### `session/hello`
-
-客户端连接后发送。服务器若发现相同 `player_id` 已在线，拒绝新连接。
-
-```json
-{
-  "type": "session/hello",
-  "payload": {
-    "player_id": "8a4f1f29-2d5a-46ef-a665-293fd67b68cc",
-    "name": "player_A7K2",
-    "client_version": "0.1.0"
-  }
-}
-```
-
-### `session/hello_ack`
-
-```json
-{
-  "type": "session/hello_ack",
-  "payload": {
-    "player_id": "8a4f1f29-2d5a-46ef-a665-293fd67b68cc",
-    "name": "player_A7K2"
-  }
-}
-```
-
-## 6. 大厅和房间
-
-### `room/list`
-
-客户端进入大厅或点击刷新时发送。
-
-```json
-{
-  "type": "room/list",
-  "payload": {}
-}
-```
-
-### `room/list_result`
-
-只返回可加入或可展示的房间摘要。
-
-```json
-{
-  "type": "room/list_result",
-  "payload": {
-    "rooms": [
-      {
-        "room_id": "1234",
-        "name": "player_A7K2 的房间",
-        "owner_name": "player_A7K2",
-        "status": "waiting",
-        "player_count": 2,
-        "max_players": 3
-      }
-    ]
-  }
-}
-```
-
-### `room/create`
-
-```json
-{
-  "type": "room/create",
-  "payload": {
-    "name": "我的房间"
-  }
-}
-```
-
-成功后服务器向房间内玩家发送 `room/state`。
-
-### `room/join`
-
-```json
-{
-  "type": "room/join",
-  "payload": {
-    "room_id": "1234"
-  }
-}
-```
-
-成功后服务器向房间内玩家广播 `room/state`。
-
-### `room/leave`
-
-```json
-{
-  "type": "room/leave",
-  "payload": {
-    "room_id": "1234"
-  }
-}
-```
-
-成功后离开者回到大厅，其余房间玩家收到新的 `room/state`。如果房间无人则销毁。
-
-### `room/ready`
-
-```json
-{
-  "type": "room/ready",
-  "payload": {
-    "room_id": "1234",
-    "is_ready": true
-  }
-}
-```
-
-房主不需要 ready。服务器广播新的 `room/state`。
-
-### `room/add_ai`
-
-仅房主可用。
-
-```json
-{
-  "type": "room/add_ai",
-  "payload": {
-    "room_id": "1234"
-  }
-}
-```
-
-### `room/remove_ai`
-
-仅房主可用。
-
-```json
-{
-  "type": "room/remove_ai",
-  "payload": {
-    "room_id": "1234",
-    "seat_index": 2
-  }
-}
-```
-
-### `room/start_game`
-
-仅房主可用。满足开局条件后，服务器创建对局并发送游戏内消息。
-
-```json
-{
-  "type": "room/start_game",
-  "payload": {
-    "room_id": "1234"
-  }
-}
-```
-
-成功后的发送顺序：
-
-1. `game/match_start`
-2. `game/match_state`
-3. `game/turn_start`
-
-### `room/state`
-
-房间完整状态。
-
-```json
-{
-  "type": "room/state",
-  "payload": {
-    "room_id": "1234",
-    "name": "我的房间",
-    "status": "waiting",
-    "owner_player_id": "8a4f1f29-2d5a-46ef-a665-293fd67b68cc",
-    "max_players": 3,
-    "players": [
-      {
-        "seat_index": 0,
-        "player_id": "8a4f1f29-2d5a-46ef-a665-293fd67b68cc",
-        "name": "player_A7K2",
-        "player_type": "human",
-        "is_owner": true,
-        "is_ready": false
-      },
-      {
-        "seat_index": 1,
-        "player_id": "ai_001",
-        "name": "AI 1",
-        "player_type": "ai",
-        "is_owner": false,
-        "is_ready": true
-      }
-    ]
-  }
-}
-```
-
-## 7. 匹配
-
-### `matchmaking/start`
-
-```json
-{
-  "type": "matchmaking/start",
-  "payload": {}
-}
-```
-
-成功进入队列后，服务器发送 `matchmaking/state`。
-
-### `matchmaking/cancel`
-
-```json
-{
-  "type": "matchmaking/cancel",
-  "payload": {}
-}
-```
-
-取消结果以服务器消息为准：
-
-- 收到 `matchmaking/state` 且 `status = idle`：取消成功。
-- 收到 `matchmaking/found`：取消失败，已经匹配成功。
-
-### `matchmaking/state`
-
-```json
-{
-  "type": "matchmaking/state",
-  "payload": {
-    "status": "queued",
-    "current_count": 2,
-    "required_count": 3
-  }
-}
-```
-
-字段：
-
-- `status`：`idle` 或 `queued`。
-- `current_count`：当前队列人数。
-- `required_count`：开局所需人数。
-
-### `matchmaking/found`
-
-匹配成功，客户端进入游戏流程。
-
-```json
-{
-  "type": "matchmaking/found",
-  "payload": {
-    "match_id": "match_abcd"
-  }
-}
-```
-
-成功后的发送顺序：
-
-1. `matchmaking/found`
-2. `game/match_start`
-3. `game/match_state`
-4. `game/turn_start`
-
-## 8. 游戏内消息
-
-### `game/play_card`
-
-客户端尝试出牌。
-
-```json
-{
-  "type": "game/play_card",
-  "payload": {
-    "match_id": "match_abcd",
-    "card_id": "S_A"
-  }
-}
-```
-
-服务端校验：
-
-- 对局存在且未结束。
-- 当前玩家属于该对局。
-- 当前轮到该玩家。
-- `card_id` 在该玩家手牌中。
-
-### `game/leave`
-
-玩家主动退出游戏。该玩家回大厅，游戏内座位由 AI 接管。
-
-```json
-{
-  "type": "game/leave",
-  "payload": {
-    "match_id": "match_abcd"
-  }
-}
-```
-
-### `game/match_start`
-
-```json
-{
-  "type": "game/match_start",
-  "payload": {
-    "match_id": "match_abcd"
-  }
-}
-```
-
-### `game/match_state`
-
-对局完整状态。每个客户端只收到自己的完整手牌，其他玩家只收到手牌数量。
-
-```json
-{
-  "type": "game/match_state",
-  "payload": {
-    "match_id": "match_abcd",
+    "match_id": "match_xxx",
     "match_status": "playing",
-    "turn": 1,
-    "current_seat_index": 0,
-    "current_played_card": {},
-    "players": [
-      {
-        "seat_index": 0,
-        "player_id": "8a4f1f29-2d5a-46ef-a665-293fd67b68cc",
-        "name": "player_A7K2",
-        "player_type": "human",
-        "hand_count": 5,
-        "hand_cards": [
-          {
-            "card_id": "S_A",
-            "card_name": "AS"
-          }
-        ]
-      },
-      {
-        "seat_index": 1,
-        "player_id": "f230b5e1-d82a-4536-92e0-2e1d14033e56",
-        "name": "player_Z9Q1",
-        "player_type": "human",
-        "hand_count": 5,
-        "hand_cards": []
-      },
-      {
-        "seat_index": 2,
-        "player_id": "ai_001",
-        "name": "AI 1",
-        "player_type": "ai",
-        "hand_count": 5,
-        "hand_cards": []
-      }
-    ]
+    "phase": "play_select",
+    "round_index": 1,
+    "server_time": 1710000000.0,
+    "phase_end_time": 1710000020.0,
+    "players": [],
+    "local_player_private": {},
+    "round_public": {
+      "pair_count": 0,
+      "pair_contains_three_count": 0,
+      "escaped_three_history": []
+    },
+    "challenge_state": {
+      "submitted_seat_indexes": [],
+      "own_target_seat_index": -2
+    },
+    "showdown_state": {
+      "events": []
+    },
+    "fortune_state": {},
+    "final_result": {}
   }
 }
 ```
 
-字段：
+阶段：
 
-- `match_status`：`playing` 或 `finished`。
-- `current_played_card`：没有已出牌时使用 `{}`。
-- `players[].hand_cards`：只对接收方自己的座位下发完整手牌。
+- `play_select`：玩家选择并确认出牌。
+- `challenge_select`：展示公开声明，玩家选择是否质疑。
+- `showdown`：按被质疑玩家公示暗牌和奖惩。
+- `fortune_draw`：玩家从自己的气运池中抽取。
+- `final_result`：展示最终排名。
 
-### `game/turn_start`
+关键字段：
+
+- `players[].public_play.face_up_card.card_name` 和 `local_player_private.hand_cards[].card_name` 是英文资源 key，例如 `spade_3`、`heart_7`，不是玩家可见展示文案。
+- 牌面数字展示和声明应使用 `rank`，不要从 `card_name` 里解析或展示资源名。
+- `round_public.pair_count`：本轮已提交出牌中形成的对子数量。
+- `round_public.pair_contains_three_count`：本轮对子信息中涉及的数字 3 数量。
+- `round_public.escaped_three_history`：已完成轮次的成功溜 3 总数数组，例如 `[1, 0]` 表示第 1 轮 1 张、第 2 轮 0 张。
+- `challenge_state.own_target_seat_index`：当前玩家已提交的质疑目标，`-1` 表示不质疑，`-2` 表示尚未提交。
+- `showdown_state.events[].fortune_deltas`：气运变化数组，元素形如 `{ "seat_index": 0, "delta": -1 }`；正数表示霉运转好运，负数表示好运转霉运。
+
+倒计时：
+
+- 服务端只在 `game/state` 中给 `server_time` 和 `phase_end_time`。
+- 客户端自己显示倒计时，不要求服务端每秒推送。
+
+## 5. 请求示例
+
+### game/submit_play
 
 ```json
 {
-  "type": "game/turn_start",
+  "type": "game/submit_play",
   "payload": {
-    "match_id": "match_abcd",
-    "turn": 2,
-    "current_seat_index": 1,
-    "remaining_seconds": 10
+    "match_id": "match_xxx",
+    "card_ids": ["card_3_0", "card_5_2"],
+    "face_up_card_id": "card_5_2"
   }
 }
 ```
 
-客户端收到后开始本地倒计时表现。真正超时判定仍由服务器负责。
+规则：
 
-### `game/card_played`
+- 至少 1 张牌。
+- 明牌必须来自 `card_ids`。
+- 出牌合法条件：全部同数字，或者包含数字 3。
+- 声明由服务端/客户端根据“总张数 + 明牌数字”生成，不允许手动填写。
+
+### game/submit_challenge
 
 ```json
 {
-  "type": "game/card_played",
+  "type": "game/submit_challenge",
   "payload": {
-    "match_id": "match_abcd",
-    "seat_index": 1,
-    "card": {
-      "card_id": "D_K",
-      "card_name": "KD"
-    }
+    "match_id": "match_xxx",
+    "target_seat_index": 2
   }
 }
 ```
 
-成功出牌后的发送顺序：
+`target_seat_index = -1` 表示不质疑。
 
-1. `game/card_played`
-2. `game/match_state`
-3. `game/turn_start` 或 `game/match_end`
-
-### `game/player_replaced_by_ai`
-
-玩家退出或断线后，该座位由 AI 接管。
+### game/submit_fortune_draw
 
 ```json
 {
-  "type": "game/player_replaced_by_ai",
+  "type": "game/submit_fortune_draw",
   "payload": {
-    "match_id": "match_abcd",
-    "seat_index": 1,
-    "player_id": "f230b5e1-d82a-4536-92e0-2e1d14033e56",
-    "ai_player_id": "ai_replace_1"
+    "match_id": "match_xxx",
+    "draw_count": 3
   }
 }
 ```
 
-随后服务器广播新的 `game/match_state`。
+P0 默认抽取范围是 `2-5`。
 
-### `game/match_end`
+### game/chat
 
 ```json
 {
-  "type": "game/match_end",
+  "type": "game/chat",
   "payload": {
-    "match_id": "match_abcd",
-    "match_status": "finished",
-    "winner_seat_index": 0
+    "match_id": "match_xxx",
+    "message": "我觉得你有3"
   }
 }
 ```
 
-客户端收到后进入结算或返回大厅。当前版本默认最终回到大厅。
+服务端广播时复用房间聊天结构，额外带 `match_id`。
 
-## 9. 主要流程
+## 6. 隐藏信息边界
 
-### 9.1 连接
-
-1. 客户端连接 WebSocket。
-2. 客户端发送 `session/hello`。
-3. 服务器返回 `session/hello_ack`。
-4. 客户端进入大厅。
-
-### 9.2 刷新大厅
-
-1. 客户端发送 `room/list`。
-2. 服务器返回 `room/list_result`。
-
-### 9.3 创建房间并开始游戏
-
-1. 房主发送 `room/create`。
-2. 服务器返回 `room/state`。
-3. 其他玩家通过 `room/join` 加入。
-4. 非房主真人发送 `room/ready`。
-5. 房主可发送 `room/add_ai` 或 `room/remove_ai`。
-6. 满足开局条件后房主发送 `room/start_game`。
-7. 服务器发送 `game/match_start -> game/match_state -> game/turn_start`。
-
-### 9.4 快速匹配
-
-1. 客户端发送 `matchmaking/start`。
-2. 服务器发送 `matchmaking/state queued`。
-3. 队列人数变化时服务器推送新的 `matchmaking/state`。
-4. 客户端取消时发送 `matchmaking/cancel` 并等待服务器确认。
-5. 凑满人后服务器发送 `matchmaking/found -> game/match_start -> game/match_state -> game/turn_start`。
-
-### 9.5 游戏内出牌
-
-1. 当前回合玩家发送 `game/play_card`。
-2. 服务器校验并执行。
-3. 服务器发送 `game/card_played`。
-4. 服务器发送最新 `game/match_state`。
-5. 未结束则发送下一次 `game/turn_start`，已结束则发送 `game/match_end`。
-
-### 9.6 游戏中退出
-
-1. 玩家发送 `game/leave` 或连接断开。
-2. 该玩家客户端回大厅。
-3. 对局内该座位由 AI 接管。
-4. 其他玩家收到 `game/player_replaced_by_ai` 和新的 `game/match_state`。
-5. 如果所有真人都离开，服务器可以销毁对局。
+- 自己的完整手牌只出现在自己的 `local_player_private.hand_cards`。
+- 自己的气运池和抽取结果只出现在自己的 `local_player_private`。
+- 其他玩家只看到公开信息：昵称、座位、手牌数、提交状态、公开明牌和声明。
+- 客户端不能收到“不该显示但先隐藏”的敏感信息。

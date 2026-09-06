@@ -54,13 +54,24 @@ class ClientConnection:
     async def _handle_session_hello(self, payload: dict[str, Any]) -> None:
         player_id = self._require_string(payload, "player_id")
         name = self._require_string(payload, "name")
-        await self._server_context.register_player(self, player_id, name)
+        character_id = payload.get("character_id", "character_1")
+        if not isinstance(character_id, str):
+            character_id = "character_1"
+
+        await self._server_context.register_player(self, player_id, name, character_id)
 
     async def _route_authenticated_message(self, message_type: str, payload: dict[str, Any]) -> None:
         assert self.player_id is not None
 
         if message_type == "room/list":
             await self._server_context.list_rooms(self.player_id)
+            return
+
+        if message_type == "profile/set_character":
+            await self._server_context.set_player_character(
+                self.player_id,
+                self._require_string(payload, "character_id"),
+            )
             return
 
         if message_type == "room/create":
@@ -99,11 +110,11 @@ class ClientConnection:
             )
             return
 
-        if message_type == "room/remove_ai":
-            await self._server_context.remove_room_ai(
+        if message_type == "room/chat":
+            await self._server_context.send_room_chat(
                 self.player_id,
                 self._require_string(payload, "room_id"),
-                self._require_int(payload, "seat_index"),
+                self._require_string(payload, "message"),
             )
             return
 
@@ -122,11 +133,36 @@ class ClientConnection:
             await self._server_context.cancel_matchmaking(self.player_id)
             return
 
-        if message_type == "game/play_card":
-            await self._server_context.play_card(
+        if message_type == "game/submit_play":
+            await self._server_context.submit_play(
                 self.player_id,
                 self._require_string(payload, "match_id"),
-                self._require_string(payload, "card_id"),
+                self._require_string_list(payload, "card_ids"),
+                self._require_string(payload, "face_up_card_id"),
+            )
+            return
+
+        if message_type == "game/submit_challenge":
+            await self._server_context.submit_challenge(
+                self.player_id,
+                self._require_string(payload, "match_id"),
+                self._require_int(payload, "target_seat_index"),
+            )
+            return
+
+        if message_type == "game/submit_fortune_draw":
+            await self._server_context.submit_fortune_draw(
+                self.player_id,
+                self._require_string(payload, "match_id"),
+                self._require_int(payload, "draw_count"),
+            )
+            return
+
+        if message_type == "game/chat":
+            await self._server_context.send_game_chat(
+                self.player_id,
+                self._require_string(payload, "match_id"),
+                self._require_string(payload, "message"),
             )
             return
 
@@ -163,6 +199,19 @@ class ClientConnection:
             raise ProtocolError("invalid_operation", f"'{field_name}' must be an integer.")
 
         return value
+
+    def _require_string_list(self, payload: dict[str, Any], field_name: str) -> list[str]:
+        value = payload.get(field_name)
+        if not isinstance(value, list) or not value:
+            raise ProtocolError("invalid_operation", f"'{field_name}' must be a non-empty string array.")
+
+        result: list[str] = []
+        for item in value:
+            if not isinstance(item, str) or not item:
+                raise ProtocolError("invalid_operation", f"'{field_name}' must be a non-empty string array.")
+            result.append(item)
+
+        return result
 
     def _scope_from_message_type(self, raw_message: str) -> str:
         try:

@@ -5,16 +5,25 @@ using UnityEngine.UI;
 
 public sealed class Room : UIScript
 {
+    private const int SeatCount = 4;
+    private const int MaxChatLineCount = 30;
+
     private readonly List<SeatBinding> _seatBindings = new List<SeatBinding>();
+    private readonly List<GameObject> _chatLineObjects = new List<GameObject>();
 
     private TMP_Text _roomNameText;
     private TMP_Text _roomIdText;
-    private TMP_Text _ownerNameText;
     private TMP_Text _roomStatusText;
     private Button _leaveButton;
     private Button _readyButton;
     private Button _addAiButton;
     private Button _startGameButton;
+    private TMP_InputField _chatInput;
+    private Button _sendChatButton;
+    private ScrollRect _chatScrollRect;
+    private Transform _chatContentTransform;
+    private TMP_FontAsset _chatFontAsset;
+    private CharacterArtLibrary _characterArtLibrary;
 
     public override string GetPath()
     {
@@ -37,32 +46,38 @@ public sealed class Room : UIScript
 
     private void BindNodes()
     {
+        _characterArtLibrary = ViewGameObject.GetComponent<CharacterArtLibrary>();
         _roomNameText = FindRequiredText("root/panel_header/txt_room_name");
         _roomIdText = FindRequiredText("root/panel_header/txt_room_id");
-        _ownerNameText = FindRequiredText("root/panel_header/txt_owner_name");
         _roomStatusText = FindRequiredText("root/txt_room_status");
         _leaveButton = FindRequiredButton("root/panel_header/btn_leave");
         _readyButton = FindRequiredButton("root/panel_controls/btn_ready");
         _addAiButton = FindRequiredButton("root/panel_controls/btn_add_ai");
         _startGameButton = FindRequiredButton("root/panel_controls/btn_start_game");
+        _chatFontAsset = FindRequiredText("root/panel_chat/txt_chat_title").font;
+        _chatScrollRect = FindRequiredScrollRect("root/panel_chat/scroll_chat");
+        _chatInput = FindRequiredInput("root/panel_chat/panel_chat_input/input_chat");
+        _sendChatButton = FindRequiredButton("root/panel_chat/panel_chat_input/btn_send_chat");
+        _chatContentTransform = FindRequiredTransform("root/panel_chat/scroll_chat/viewport/content");
 
-        for (int seatIndex = 0; seatIndex < 3; seatIndex += 1)
+        for (int seatIndex = 0; seatIndex < SeatCount; seatIndex += 1)
         {
             Transform slotTransform = FindRequiredTransform($"root/panel_players/slot_player{seatIndex}");
             _seatBindings.Add(new SeatBinding(
                 seatIndex,
+                FindRequiredImage(slotTransform, "img_character"),
                 FindRequiredText(slotTransform, "txt_seat"),
                 FindRequiredText(slotTransform, "txt_name"),
                 FindRequiredText(slotTransform, "txt_player_type"),
-                FindRequiredText(slotTransform, "txt_ready"),
-                FindRequiredText(slotTransform, "txt_owner"),
-                FindRequiredButton(slotTransform, "btn_remove_ai")));
+                FindRequiredText(slotTransform, "txt_ready")));
         }
 
         _leaveButton.onClick.AddListener(OnClickLeave);
         _readyButton.onClick.AddListener(OnClickReady);
         _addAiButton.onClick.AddListener(OnClickAddAI);
         _startGameButton.onClick.AddListener(OnClickStartGame);
+        _sendChatButton.onClick.AddListener(OnClickSendChat);
+        _chatInput.onSubmit.AddListener(OnSubmitChat);
     }
 
     private void SubscribeEvents()
@@ -74,17 +89,26 @@ public sealed class Room : UIScript
         }
 
         roomModel.RoomStateUpdated += RenderRoomState;
+        OnlineGameController controller = GameApp.Current?.OnlineGameController;
+        if (controller != null)
+        {
+            controller.RoomChatReceived += OnRoomChatReceived;
+        }
     }
 
     private void UnsubscribeEvents()
     {
         RoomModel roomModel = GameApp.Current?.OnlineGameController?.RoomModel;
-        if (roomModel == null)
+        if (roomModel != null)
         {
-            return;
+            roomModel.RoomStateUpdated -= RenderRoomState;
         }
 
-        roomModel.RoomStateUpdated -= RenderRoomState;
+        OnlineGameController controller = GameApp.Current?.OnlineGameController;
+        if (controller != null)
+        {
+            controller.RoomChatReceived -= OnRoomChatReceived;
+        }
     }
 
     private void RenderRoomState()
@@ -102,7 +126,6 @@ public sealed class Room : UIScript
 
         _roomNameText.text = roomModel.Name;
         _roomIdText.text = $"房间号 {roomModel.RoomId}";
-        _ownerNameText.text = $"房主 {FindOwnerName(roomModel)}";
         _roomStatusText.text = BuildRoomStatusText(roomModel, localPlayer, isLocalOwner);
 
         _readyButton.gameObject.SetActive(!isLocalOwner);
@@ -110,7 +133,8 @@ public sealed class Room : UIScript
         SetButtonLabel(_readyButton, localPlayer != null && localPlayer.IsReady ? "取消准备" : "准备");
 
         _addAiButton.gameObject.SetActive(isLocalOwner);
-        _addAiButton.interactable = isLocalOwner && !roomModel.IsFull();
+        _addAiButton.interactable = roomModel.CanLocalAddAI(localPlayerId);
+
         _startGameButton.gameObject.SetActive(isLocalOwner);
         _startGameButton.interactable = roomModel.CanLocalStartGame(localPlayerId);
 
@@ -126,27 +150,32 @@ public sealed class Room : UIScript
         seatBinding.SeatText.text = $"座位 {seatBinding.SeatIndex + 1}";
         if (player == null)
         {
-            seatBinding.NameText.text = "空位";
+            seatBinding.CharacterImage.sprite = null;
+            seatBinding.CharacterImage.color = new Color32(88, 34, 30, 180);
+            ApplyCharacterPresentation(seatBinding.CharacterImage, Vector2.zero, 1f);
+            seatBinding.NameText.text = "等待玩家加入";
             seatBinding.PlayerTypeText.text = "-";
             seatBinding.ReadyText.text = "-";
-            seatBinding.OwnerText.text = "";
-            seatBinding.RemoveAiButton.gameObject.SetActive(false);
-            seatBinding.RemoveAiButton.onClick.RemoveAllListeners();
             return;
         }
 
+        seatBinding.CharacterImage.sprite = _characterArtLibrary?.GetSprite(player.CharacterId);
+        seatBinding.CharacterImage.preserveAspect = true;
+        seatBinding.CharacterImage.color = Color.white;
+        ApplyCharacterPresentation(
+            seatBinding.CharacterImage,
+            _characterArtLibrary?.GetRoomOffset(player.CharacterId) ?? Vector2.zero,
+            _characterArtLibrary?.GetRoomScale(player.CharacterId) ?? 1f);
         seatBinding.NameText.text = player.Name;
         seatBinding.PlayerTypeText.text = player.IsAI ? "AI" : "玩家";
         seatBinding.ReadyText.text = player.IsOwner ? "房主" : player.IsReady ? "已准备" : "未准备";
-        seatBinding.OwnerText.text = player.IsOwner ? "Owner" : "";
-        seatBinding.RemoveAiButton.gameObject.SetActive(player.IsAI && isLocalOwner);
-        seatBinding.RemoveAiButton.interactable = player.IsAI && isLocalOwner;
-        seatBinding.RemoveAiButton.onClick.RemoveAllListeners();
-        if (player.IsAI && isLocalOwner)
-        {
-            int seatIndex = player.SeatIndex;
-            seatBinding.RemoveAiButton.onClick.AddListener(() => GameApp.Current?.OnlineGameController?.RemoveAI(seatIndex));
-        }
+    }
+
+    private void ApplyCharacterPresentation(Image characterImage, Vector2 offset, float scale)
+    {
+        RectTransform rectTransform = characterImage.rectTransform;
+        rectTransform.anchoredPosition = offset;
+        rectTransform.localScale = new Vector3(scale, scale, 1f);
     }
 
     private string BuildRoomStatusText(RoomModel roomModel, RoomPlayerSnapshot localPlayer, bool isLocalOwner)
@@ -162,19 +191,6 @@ public sealed class Room : UIScript
         }
 
         return localPlayer != null && localPlayer.IsReady ? "已准备，等待房主开始" : "人数已满，请准备";
-    }
-
-    private string FindOwnerName(RoomModel roomModel)
-    {
-        foreach (RoomPlayerSnapshot player in roomModel.Players)
-        {
-            if (player.IsOwner)
-            {
-                return player.Name;
-            }
-        }
-
-        return "-";
     }
 
     private void OnClickLeave()
@@ -204,6 +220,82 @@ public sealed class Room : UIScript
         GameApp.Current?.OnlineGameController?.StartRoomGame();
     }
 
+    private void OnClickSendChat()
+    {
+        SendChatFromInput();
+    }
+
+    private void OnSubmitChat(string _)
+    {
+        SendChatFromInput();
+    }
+
+    private void SendChatFromInput()
+    {
+        if (_chatInput == null || string.IsNullOrWhiteSpace(_chatInput.text))
+        {
+            return;
+        }
+
+        GameApp.Current?.OnlineGameController?.SendRoomChat(_chatInput.text);
+        _chatInput.text = string.Empty;
+    }
+
+    private void OnRoomChatReceived(NetworkRoomChatPayload payload)
+    {
+        if (payload == null || string.IsNullOrEmpty(payload.message))
+        {
+            return;
+        }
+
+        AddChatLine($"{payload.name}: {payload.message}");
+    }
+
+    private void AddChatLine(string message)
+    {
+        if (_chatContentTransform == null)
+        {
+            return;
+        }
+
+        GameObject chatLineObject = new GameObject("chat_line", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        chatLineObject.transform.SetParent(_chatContentTransform, false);
+
+        TMP_Text text = chatLineObject.GetComponent<TMP_Text>();
+        text.text = message;
+        text.fontSize = 20;
+        text.color = new Color32(255, 238, 202, 255);
+        text.alignment = TextAlignmentOptions.Left;
+        text.textWrappingMode = TextWrappingModes.Normal;
+        if (_chatFontAsset != null)
+        {
+            text.font = _chatFontAsset;
+        }
+
+        ContentSizeFitter fitter = chatLineObject.AddComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        LayoutElement layoutElement = chatLineObject.AddComponent<LayoutElement>();
+        layoutElement.minHeight = 30;
+        layoutElement.flexibleWidth = 1;
+        _chatLineObjects.Add(chatLineObject);
+
+        while (_chatLineObjects.Count > MaxChatLineCount)
+        {
+            GameObject firstLine = _chatLineObjects[0];
+            _chatLineObjects.RemoveAt(0);
+            if (firstLine != null)
+            {
+                UnityEngine.Object.Destroy(firstLine);
+            }
+        }
+
+        Canvas.ForceUpdateCanvases();
+        if (_chatScrollRect != null)
+        {
+            _chatScrollRect.verticalNormalizedPosition = 0f;
+        }
+    }
+
     private void RemoveButtonListeners()
     {
         if (_leaveButton != null)
@@ -226,10 +318,17 @@ public sealed class Room : UIScript
             _startGameButton.onClick.RemoveListener(OnClickStartGame);
         }
 
-        foreach (SeatBinding seatBinding in _seatBindings)
+        if (_sendChatButton != null)
         {
-            seatBinding.RemoveAiButton.onClick.RemoveAllListeners();
+            _sendChatButton.onClick.RemoveListener(OnClickSendChat);
         }
+
+        if (_chatInput != null)
+        {
+            _chatInput.onSubmit.RemoveListener(OnSubmitChat);
+        }
+
+        ClearChatLines();
     }
 
     private void ClearReferences()
@@ -237,12 +336,30 @@ public sealed class Room : UIScript
         _seatBindings.Clear();
         _roomNameText = null;
         _roomIdText = null;
-        _ownerNameText = null;
         _roomStatusText = null;
         _leaveButton = null;
         _readyButton = null;
         _addAiButton = null;
         _startGameButton = null;
+        _chatInput = null;
+        _sendChatButton = null;
+        _chatScrollRect = null;
+        _chatContentTransform = null;
+        _chatFontAsset = null;
+        _characterArtLibrary = null;
+    }
+
+    private void ClearChatLines()
+    {
+        foreach (GameObject chatLineObject in _chatLineObjects)
+        {
+            if (chatLineObject != null)
+            {
+                UnityEngine.Object.Destroy(chatLineObject);
+            }
+        }
+
+        _chatLineObjects.Clear();
     }
 
     private void SetButtonLabel(Button button, string label)
@@ -288,6 +405,42 @@ public sealed class Room : UIScript
         return button;
     }
 
+    private ScrollRect FindRequiredScrollRect(string path)
+    {
+        Transform targetTransform = FindRequiredTransform(ViewTransform, path);
+        ScrollRect scrollRect = targetTransform.GetComponent<ScrollRect>();
+        if (scrollRect == null)
+        {
+            throw new System.InvalidOperationException($"Room view cannot find ScrollRect at path: {path}");
+        }
+
+        return scrollRect;
+    }
+
+    private TMP_InputField FindRequiredInput(string path)
+    {
+        Transform targetTransform = FindRequiredTransform(ViewTransform, path);
+        TMP_InputField input = targetTransform.GetComponent<TMP_InputField>();
+        if (input == null)
+        {
+            throw new System.InvalidOperationException($"Room view cannot find TMP_InputField at path: {path}");
+        }
+
+        return input;
+    }
+
+    private Image FindRequiredImage(Transform rootTransform, string path)
+    {
+        Transform targetTransform = FindRequiredTransform(rootTransform, path);
+        Image image = targetTransform.GetComponent<Image>();
+        if (image == null)
+        {
+            throw new System.InvalidOperationException($"Room view cannot find Image at path: {path}");
+        }
+
+        return image;
+    }
+
     private Transform FindRequiredTransform(string path)
     {
         return FindRequiredTransform(ViewTransform, path);
@@ -307,29 +460,26 @@ public sealed class Room : UIScript
     private sealed class SeatBinding
     {
         public int SeatIndex { get; }
+        public Image CharacterImage { get; }
         public TMP_Text SeatText { get; }
         public TMP_Text NameText { get; }
         public TMP_Text PlayerTypeText { get; }
         public TMP_Text ReadyText { get; }
-        public TMP_Text OwnerText { get; }
-        public Button RemoveAiButton { get; }
 
         public SeatBinding(
             int seatIndex,
+            Image characterImage,
             TMP_Text seatText,
             TMP_Text nameText,
             TMP_Text playerTypeText,
-            TMP_Text readyText,
-            TMP_Text ownerText,
-            Button removeAiButton)
+            TMP_Text readyText)
         {
             SeatIndex = seatIndex;
+            CharacterImage = characterImage;
             SeatText = seatText;
             NameText = nameText;
             PlayerTypeText = playerTypeText;
             ReadyText = readyText;
-            OwnerText = ownerText;
-            RemoveAiButton = removeAiButton;
         }
     }
 }

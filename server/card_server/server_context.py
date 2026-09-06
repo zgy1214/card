@@ -3,7 +3,7 @@ import logging
 import random
 from typing import Any
 
-from .game_session import GameRuleError, GameSession, PlayResult
+from .game_session import GameRuleError, GameSession
 from .models import (
     PLAYER_STATUS_GAME,
     PLAYER_STATUS_IDLE,
@@ -19,8 +19,8 @@ from .models import (
 
 
 class ServerContext:
-    required_matchmaking_players = 3
-    default_room_max_players = 3
+    required_matchmaking_players = 4
+    default_room_max_players = 4
 
     def __init__(self, logger: logging.Logger) -> None:
         self._logger = logger
@@ -30,11 +30,11 @@ class ServerContext:
         self._rooms: dict[str, Room] = {}
         self._matches: dict[str, GameSession] = {}
         self._matchmaking_queue: list[str] = []
-        self._turn_tasks: dict[str, asyncio.Task[None]] = {}
+        self._phase_tasks: dict[str, asyncio.Task[None]] = {}
         self._ai_counter = 0
         self._rng = random.Random()
 
-    async def register_player(self, connection: Any, player_id: str, name: str) -> None:
+    async def register_player(self, connection: Any, player_id: str, name: str, character_id: str) -> None:
         async with self._lock:
             if player_id in self._connections:
                 await connection.send_error("session", "duplicate_player", "Player is already online.")
@@ -42,15 +42,37 @@ class ServerContext:
                 return
 
             self._connections[player_id] = connection
-            self._players[player_id] = PlayerRecord(player_id=player_id, name=name)
+            self._players[player_id] = PlayerRecord(
+                player_id=player_id,
+                name=name,
+                character_id=self._normalize_character_id(character_id),
+            )
             connection.bind_player(player_id, name)
             await connection.send_message(
                 "session/hello_ack",
                 {
                     "player_id": player_id,
                     "name": name,
+                    "character_id": self._players[player_id].character_id,
                 },
             )
+
+    async def set_player_character(self, player_id: str, character_id: str) -> None:
+        async with self._lock:
+            player = self._require_player(player_id)
+            player.character_id = self._normalize_character_id(character_id)
+
+            if player.status != PLAYER_STATUS_ROOM or player.room_id is None:
+                return
+
+            room = self._rooms.get(player.room_id)
+            if room is None:
+                return
+
+            room_player = room.get_player(player_id)
+            if room_player is not None:
+                room_player.character_id = player.character_id
+                await self._broadcast_room_state_locked(room)
 
     async def unregister_connection(self, connection: Any) -> None:
         player_id = connection.player_id
@@ -153,27 +175,16 @@ class ServerContext:
 
             self._ai_counter += 1
             seat_index = room.next_free_seat_index()
-            ai_player_id = f"ai_{self._ai_counter:03d}"
             room.players.append(
                 RoomPlayer(
                     seat_index=seat_index,
-                    player_id=ai_player_id,
+                    player_id=f"ai_{self._ai_counter:03d}",
                     name=f"AI {seat_index + 1}",
+                    character_id="character_2" if seat_index % 2 else "character_1",
                     player_type=PLAYER_TYPE_AI,
                     is_ready=True,
                 )
             )
-            room.clear_human_ready()
-            await self._broadcast_room_state_locked(room)
-
-    async def remove_room_ai(self, player_id: str, room_id: str, seat_index: int) -> None:
-        async with self._lock:
-            room = self._require_owned_waiting_room(player_id, room_id)
-            room_player = room.get_player_by_seat(seat_index)
-            if room_player is None or not room_player.is_ai:
-                raise GameRuleError("invalid_operation", "AI player was not found at this seat.")
-
-            room.players.remove(room_player)
             room.clear_human_ready()
             await self._broadcast_room_state_locked(room)
 
@@ -234,15 +245,38 @@ class ServerContext:
             )
             await self._broadcast_matchmaking_state_locked()
 
-    async def play_card(self, player_id: str, match_id: str, card_id: str) -> None:
+    async def submit_play(self, player_id: str, match_id: str, card_ids: list[str], face_up_card_id: str) -> None:
         async with self._lock:
             player = self._require_player(player_id)
             if player.match_id != match_id:
                 raise GameRuleError("game_not_found", "Player is not in this match.")
 
             session = self._require_match(match_id)
-            play_result = session.play_card(match_id, player_id, card_id)
-            await self._after_successful_play_locked(session, play_result)
+            previous_phase = session.phase
+            session.submit_play(match_id, player_id, card_ids, face_up_card_id)
+            await self._after_game_action_locked(session, previous_phase)
+
+    async def submit_challenge(self, player_id: str, match_id: str, target_seat_index: int) -> None:
+        async with self._lock:
+            player = self._require_player(player_id)
+            if player.match_id != match_id:
+                raise GameRuleError("game_not_found", "Player is not in this match.")
+
+            session = self._require_match(match_id)
+            previous_phase = session.phase
+            session.submit_challenge(match_id, player_id, target_seat_index)
+            await self._after_game_action_locked(session, previous_phase)
+
+    async def submit_fortune_draw(self, player_id: str, match_id: str, draw_count: int) -> None:
+        async with self._lock:
+            player = self._require_player(player_id)
+            if player.match_id != match_id:
+                raise GameRuleError("game_not_found", "Player is not in this match.")
+
+            session = self._require_match(match_id)
+            previous_phase = session.phase
+            session.submit_fortune_draw(match_id, player_id, draw_count)
+            await self._after_game_action_locked(session, previous_phase)
 
     async def leave_game(self, player_id: str, match_id: str) -> None:
         async with self._lock:
@@ -250,7 +284,66 @@ class ServerContext:
             if player.match_id != match_id:
                 raise GameRuleError("game_not_found", "Player is not in this match.")
 
+            session = self._require_match(match_id)
+            if not session.is_playing:
+                player.status = PLAYER_STATUS_IDLE
+                player.match_id = None
+                if not self._connected_human_ids_for_match(session):
+                    await self._destroy_match_locked(session.match_id)
+                return
+
             await self._replace_game_player_with_ai_locked(player)
+
+    async def send_game_chat(self, player_id: str, match_id: str, message: str) -> None:
+        async with self._lock:
+            player = self._require_player(player_id)
+            if player.match_id != match_id:
+                raise GameRuleError("game_not_found", "Player is not in this match.")
+
+            session = self._require_match(match_id)
+            trimmed_message = message.strip()
+            if not trimmed_message:
+                raise GameRuleError("invalid_operation", "Chat message is empty.")
+
+            if len(trimmed_message) > 80:
+                trimmed_message = trimmed_message[:80]
+
+            await self._broadcast_to_match_locked(
+                session,
+                "game/chat",
+                {
+                    "match_id": match_id,
+                    "player_id": player.player_id,
+                    "name": player.name,
+                    "character_id": player.character_id,
+                    "message": trimmed_message,
+                },
+            )
+
+    async def send_room_chat(self, player_id: str, room_id: str, message: str) -> None:
+        async with self._lock:
+            player = self._require_player(player_id)
+            room = self._require_waiting_room(room_id)
+            if player.room_id != room.room_id:
+                raise GameRuleError("room_not_found", "Player is not in this room.")
+
+            trimmed_message = message.strip()
+            if not trimmed_message:
+                raise GameRuleError("invalid_operation", "Chat message is empty.")
+
+            if len(trimmed_message) > 80:
+                trimmed_message = trimmed_message[:80]
+
+            await self._broadcast_room_chat_locked(
+                room,
+                {
+                    "room_id": room.room_id,
+                    "player_id": player.player_id,
+                    "name": player.name,
+                    "character_id": player.character_id,
+                    "message": trimmed_message,
+                },
+            )
 
     async def _start_matchmaking_game_locked(self, player_ids: list[str]) -> None:
         room_players: list[RoomPlayer] = []
@@ -265,12 +358,12 @@ class ServerContext:
                 await connection.send_message("matchmaking/found", {"match_id": session.match_id})
 
         await self._broadcast_game_start_locked(session)
-        self._schedule_turn_task_locked(session)
+        self._schedule_phase_task_locked(session)
 
     async def _start_game_from_room_players_locked(self, room_players: list[RoomPlayer]) -> GameSession:
         session = self._create_game_from_room_players_locked(room_players)
         await self._broadcast_game_start_locked(session)
-        self._schedule_turn_task_locked(session)
+        self._schedule_phase_task_locked(session)
         return session
 
     def _create_game_from_room_players_locked(self, room_players: list[RoomPlayer]) -> GameSession:
@@ -289,21 +382,13 @@ class ServerContext:
 
         return session
 
-    async def _after_successful_play_locked(self, session: GameSession, play_result: PlayResult) -> None:
-        await self._cancel_turn_task_locked(session.match_id)
-        await self._broadcast_to_match_locked(
-            session,
-            "game/card_played",
-            session.to_card_played_payload(play_result),
-        )
+    async def _after_game_action_locked(self, session: GameSession, previous_phase: str) -> None:
+        if session.phase != previous_phase:
+            await self._cancel_phase_task_locked(session.match_id)
+
         await self._broadcast_match_state_locked(session)
-
         if session.is_playing:
-            await self._broadcast_to_match_locked(session, "game/turn_start", session.to_turn_start_payload())
-            self._schedule_turn_task_locked(session)
-            return
-
-        await self._finish_match_locked(session)
+            self._schedule_phase_task_locked(session)
 
     async def _replace_game_player_with_ai_locked(self, player: PlayerRecord) -> None:
         if player.match_id is None:
@@ -315,6 +400,7 @@ class ServerContext:
             player.match_id = None
             return
 
+        previous_phase = session.phase
         replacement = session.replace_player_with_ai(player.player_id)
         old_player_id = player.player_id
         player.status = PLAYER_STATUS_IDLE
@@ -323,6 +409,9 @@ class ServerContext:
         if replacement is None:
             return
 
+        if session.phase != previous_phase:
+            await self._cancel_phase_task_locked(session.match_id)
+
         seat_index, ai_player_id = replacement
         await self._broadcast_to_match_locked(
             session,
@@ -330,27 +419,17 @@ class ServerContext:
             session.to_player_replaced_by_ai_payload(seat_index, old_player_id, ai_player_id),
         )
         await self._broadcast_match_state_locked(session)
+        self._schedule_phase_task_locked(session)
 
         # Once no connected humans remain, there is no client left to observe this demo match.
         if not self._connected_human_ids_for_match(session):
             await self._destroy_match_locked(session.match_id)
 
-    async def _finish_match_locked(self, session: GameSession) -> None:
-        await self._cancel_turn_task_locked(session.match_id)
-        await self._broadcast_to_match_locked(session, "game/match_end", session.to_match_end_payload())
-        for player_id in self._connected_human_ids_for_match(session):
-            player = self._players.get(player_id)
-            if player is not None:
-                player.status = PLAYER_STATUS_IDLE
-                player.match_id = None
-
-        self._matches.pop(session.match_id, None)
-
-    async def _run_turn_timeout(
+    async def _run_phase_timeout(
         self,
         expected_match_id: str,
-        expected_turn: int,
-        expected_seat_index: int,
+        expected_phase: str,
+        expected_round: int,
         delay_seconds: float,
     ) -> None:
         try:
@@ -360,32 +439,39 @@ class ServerContext:
                 if session is None or not session.is_playing:
                     return
 
-                if session.turn != expected_turn or session.current_seat_index != expected_seat_index:
+                if session.phase != expected_phase or session.round_index != expected_round:
                     return
 
-                play_result = session.auto_play_current_turn()
-                await self._after_successful_play_locked(session, play_result)
+                previous_phase = session.phase
+                session.handle_phase_timeout(expected_phase, expected_round)
+                await self._after_game_action_locked(session, previous_phase)
         except asyncio.CancelledError:
             return
         except Exception:
-            self._logger.exception("Unexpected error while resolving a turn timeout.")
+            self._logger.exception("Unexpected error while resolving a phase timeout.")
 
-    def _schedule_turn_task_locked(self, session: GameSession) -> None:
+    def _schedule_phase_task_locked(self, session: GameSession) -> None:
         if not session.is_playing:
             return
 
-        delay_seconds = session.current_turn_delay_seconds()
-        self._turn_tasks[session.match_id] = asyncio.create_task(
-            self._run_turn_timeout(
+        if session.match_id in self._phase_tasks:
+            return
+
+        delay_seconds = session.current_phase_delay_seconds()
+        if delay_seconds <= 0:
+            return
+
+        self._phase_tasks[session.match_id] = asyncio.create_task(
+            self._run_phase_timeout(
                 session.match_id,
-                session.turn,
-                session.current_seat_index,
+                session.phase,
+                session.round_index,
                 delay_seconds,
             )
         )
 
-    async def _cancel_turn_task_locked(self, match_id: str) -> None:
-        task = self._turn_tasks.pop(match_id, None)
+    async def _cancel_phase_task_locked(self, match_id: str) -> None:
+        task = self._phase_tasks.pop(match_id, None)
         if task is None:
             return
 
@@ -399,7 +485,7 @@ class ServerContext:
             pass
 
     async def _destroy_match_locked(self, match_id: str) -> None:
-        await self._cancel_turn_task_locked(match_id)
+        await self._cancel_phase_task_locked(match_id)
         self._matches.pop(match_id, None)
 
     async def _remove_player_from_room_locked(self, player: PlayerRecord) -> None:
@@ -421,13 +507,12 @@ class ServerContext:
     async def _broadcast_game_start_locked(self, session: GameSession) -> None:
         await self._broadcast_to_match_locked(session, "game/match_start", session.to_match_start_payload())
         await self._broadcast_match_state_locked(session)
-        await self._broadcast_to_match_locked(session, "game/turn_start", session.to_turn_start_payload())
 
     async def _broadcast_match_state_locked(self, session: GameSession) -> None:
         for player_id in self._connected_human_ids_for_match(session):
             connection = self._connections.get(player_id)
             if connection is not None:
-                await connection.send_message("game/match_state", session.to_match_state_payload(player_id))
+                await connection.send_message("game/state", session.to_game_state_payload(player_id))
 
     async def _broadcast_to_match_locked(
         self,
@@ -450,6 +535,15 @@ class ServerContext:
             if connection is not None:
                 await connection.send_message("room/state", payload)
 
+    async def _broadcast_room_chat_locked(self, room: Room, payload: dict[str, object]) -> None:
+        for room_player in room.players:
+            if not room_player.is_human:
+                continue
+
+            connection = self._connections.get(room_player.player_id)
+            if connection is not None:
+                await connection.send_message("room/chat_message", payload)
+
     async def _broadcast_matchmaking_state_locked(self) -> None:
         payload = {
             "status": PLAYER_STATUS_MATCHMAKING,
@@ -462,11 +556,18 @@ class ServerContext:
                 await connection.send_message("matchmaking/state", payload)
 
     def _connected_human_ids_for_match(self, session: GameSession) -> list[str]:
-        return [
-            player.player_id
-            for player in session.players
-            if player.is_human and player.player_id in self._connections
-        ]
+        player_ids: list[str] = []
+        for player in session.players:
+            player_record = self._players.get(player.player_id)
+            if (
+                player.is_human
+                and player.player_id in self._connections
+                and player_record is not None
+                and player_record.match_id == session.match_id
+            ):
+                player_ids.append(player.player_id)
+
+        return player_ids
 
     def _remove_from_matchmaking_queue(self, player_id: str) -> None:
         self._matchmaking_queue = [
@@ -524,3 +625,9 @@ class ServerContext:
                 return room_id
 
         raise GameRuleError("invalid_operation", "Cannot allocate a room id.")
+
+    def _normalize_character_id(self, character_id: str) -> str:
+        if character_id in {"character_1", "character_2"}:
+            return character_id
+
+        return "character_1"

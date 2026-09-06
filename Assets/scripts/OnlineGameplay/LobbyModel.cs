@@ -6,7 +6,7 @@ public sealed class LobbyModel
     private readonly List<RoomSummarySnapshot> _rooms = new List<RoomSummarySnapshot>();
 
     public IReadOnlyList<RoomSummarySnapshot> Rooms => _rooms;
-    public MatchmakingSnapshot MatchmakingState { get; private set; } = MatchmakingSnapshot.Idle(0, 3);
+    public MatchmakingSnapshot MatchmakingState { get; private set; } = MatchmakingSnapshot.Idle(0, 4);
     public bool IsSessionReady { get; private set; }
 
     public event Action RoomListUpdated;

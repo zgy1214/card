@@ -12,12 +12,14 @@ public sealed class LocalPlayerProfile
 
     public string PlayerId { get; private set; }
     public string Name { get; private set; }
+    public string CharacterId { get; private set; }
 
     public void LoadOrCreate()
     {
         LocalPlayerProfileSaveData saveData = LoadSaveData();
         PlayerId = string.IsNullOrEmpty(saveData.player_id) ? Guid.NewGuid().ToString() : saveData.player_id;
         Name = string.IsNullOrEmpty(saveData.name) ? GenerateDefaultName() : saveData.name;
+        CharacterId = NormalizeCharacterId(saveData.character_id);
         MarkDirty();
         SaveIfDirty(force: true);
     }
@@ -47,6 +49,18 @@ public sealed class LocalPlayerProfile
         MarkDirty();
     }
 
+    public void SetCharacterId(string characterId)
+    {
+        string normalizedCharacterId = NormalizeCharacterId(characterId);
+        if (string.Equals(CharacterId, normalizedCharacterId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        CharacterId = normalizedCharacterId;
+        MarkDirty();
+    }
+
     public void SaveIfDirty(bool force = false)
     {
         if (!_isDirty && !force)
@@ -57,7 +71,8 @@ public sealed class LocalPlayerProfile
         LocalPlayerProfileSaveData saveData = new LocalPlayerProfileSaveData
         {
             player_id = PlayerId,
-            name = Name
+            name = Name,
+            character_id = CharacterId
         };
 
         File.WriteAllText(GetSavePath(), JsonUtility.ToJson(saveData, prettyPrint: true));
@@ -108,10 +123,23 @@ public sealed class LocalPlayerProfile
         return $"player_{new string(suffix)}";
     }
 
+    private string NormalizeCharacterId(string characterId)
+    {
+        switch (characterId)
+        {
+            case "character_1":
+            case "character_2":
+                return characterId;
+            default:
+                return "character_1";
+        }
+    }
+
     [Serializable]
     private sealed class LocalPlayerProfileSaveData
     {
         public string player_id;
         public string name;
+        public string character_id;
     }
 }

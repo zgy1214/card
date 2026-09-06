@@ -7,8 +7,10 @@ public sealed class Lobby : UIScript
 {
     private const string RoomItemPrefabPath = "prefabs/template/room_item";
     private const string BlockingOverlayPrefabPath = "prefabs/template/blocking_overlay";
+    private const int CharacterOptionCount = 2;
 
     private readonly List<GameObject> _roomItemGameObjects = new List<GameObject>();
+    private readonly List<CharacterOptionBinding> _characterOptionBindings = new List<CharacterOptionBinding>();
 
     private TMP_Text _playerNameText;
     private TMP_Text _playerIdText;
@@ -23,6 +25,9 @@ public sealed class Lobby : UIScript
     private Button _joinRoomButton;
     private Button _createRoomButton;
     private Button _profileButton;
+    private Image _selectedCharacterImage;
+    private TMP_Text _selectedCharacterText;
+    private CharacterArtLibrary _characterArtLibrary;
     private GameObject _blockingOverlayObject;
     private TMP_Text _overlayTitleText;
     private TMP_Text _overlayMessageText;
@@ -55,11 +60,14 @@ public sealed class Lobby : UIScript
 
     private void BindNodes()
     {
+        _characterArtLibrary = ViewGameObject.GetComponent<CharacterArtLibrary>();
         _playerNameText = FindRequiredText("root/panel_actions/panel_player_info/txt_player_name");
         _playerIdText = FindRequiredText("root/panel_actions/panel_player_info/txt_player_id");
         _connectionStatusText = FindRequiredText("root/panel_actions/panel_player_info/txt_connection_status");
         _matchmakingStatusText = FindRequiredText("root/panel_actions/panel_matchmaking/txt_matchmaking_status");
         _emptyHintText = FindRequiredText("root/panel_room_list/txt_empty_hint");
+        _selectedCharacterImage = FindRequiredImage("root/panel_profile/panel_character_showcase/img_character");
+        _selectedCharacterText = FindRequiredText("root/panel_profile/panel_character_showcase/txt_character_name");
         _roomIdInput = FindRequiredInput("root/panel_actions/panel_join_room/panel_join_row/input_room_id");
         _roomNameInput = FindRequiredInput("root/panel_actions/panel_create_room/input_room_name");
         _roomListContentTransform = FindRequiredTransform("root/panel_room_list/scroll_room_list/viewport/content");
@@ -74,6 +82,22 @@ public sealed class Lobby : UIScript
         _joinRoomButton.onClick.AddListener(OnClickJoinRoom);
         _createRoomButton.onClick.AddListener(OnClickCreateRoom);
         _profileButton.onClick.AddListener(OnClickProfile);
+
+        for (int index = 0; index < CharacterOptionCount; index += 1)
+        {
+            string characterId = $"character_{index + 1}";
+            Transform optionTransform = FindRequiredTransform($"root/panel_profile/panel_character_picker/btn_character{index}");
+            Button button = optionTransform.GetComponent<Button>();
+            Image portraitImage = optionTransform.Find("img_portrait")?.GetComponent<Image>();
+            TMP_Text labelText = optionTransform.Find("txt_label")?.GetComponent<TMP_Text>();
+            if (button == null || portraitImage == null || labelText == null)
+            {
+                throw new System.InvalidOperationException($"Lobby character option is incomplete: {optionTransform.name}");
+            }
+
+            _characterOptionBindings.Add(new CharacterOptionBinding(characterId, button, portraitImage, labelText));
+            button.onClick.AddListener(() => OnClickCharacter(characterId));
+        }
     }
 
     private void SubscribeEvents()
@@ -114,6 +138,33 @@ public sealed class Lobby : UIScript
 
         _playerNameText.text = profile.Name;
         _playerIdText.text = $"ID: {ShortenPlayerId(profile.PlayerId)}";
+        RenderCharacterSelection(profile.CharacterId);
+    }
+
+    private void RenderCharacterSelection(string characterId)
+    {
+        string selectedCharacterId = string.IsNullOrEmpty(characterId) ? "character_1" : characterId;
+        if (_selectedCharacterImage != null)
+        {
+            _selectedCharacterImage.sprite = _characterArtLibrary?.GetSprite(selectedCharacterId);
+            _selectedCharacterImage.preserveAspect = true;
+        }
+
+        if (_selectedCharacterText != null)
+        {
+            _selectedCharacterText.text = GetCharacterDisplayName(selectedCharacterId);
+        }
+
+        foreach (CharacterOptionBinding binding in _characterOptionBindings)
+        {
+            bool isSelected = string.Equals(binding.CharacterId, selectedCharacterId, System.StringComparison.Ordinal);
+            binding.PortraitImage.sprite = _characterArtLibrary?.GetSprite(binding.CharacterId);
+            binding.PortraitImage.preserveAspect = true;
+            binding.LabelText.text = isSelected ? "已选择" : GetCharacterDisplayName(binding.CharacterId);
+            binding.Button.targetGraphic.color = isSelected
+                ? new Color32(250, 210, 104, 255)
+                : new Color32(128, 38, 32, 235);
+        }
     }
 
     private void RenderConnectionState()
@@ -261,6 +312,18 @@ public sealed class Lobby : UIScript
         Debug.Log("Profile button is a placeholder in this version.");
     }
 
+    private void OnClickCharacter(string characterId)
+    {
+        OnlineGameController controller = GameApp.Current?.OnlineGameController;
+        if (controller == null)
+        {
+            return;
+        }
+
+        controller.SetCharacter(characterId);
+        RenderCharacterSelection(controller.LocalPlayerProfile.CharacterId);
+    }
+
     private void OnErrorOccurred(string message)
     {
         _matchmakingStatusText.text = message;
@@ -309,6 +372,14 @@ public sealed class Lobby : UIScript
         {
             _profileButton.onClick.RemoveListener(OnClickProfile);
         }
+
+        foreach (CharacterOptionBinding binding in _characterOptionBindings)
+        {
+            if (binding.Button != null)
+            {
+                binding.Button.onClick.RemoveAllListeners();
+            }
+        }
     }
 
     private void ClearReferences()
@@ -326,6 +397,10 @@ public sealed class Lobby : UIScript
         _joinRoomButton = null;
         _createRoomButton = null;
         _profileButton = null;
+        _selectedCharacterImage = null;
+        _selectedCharacterText = null;
+        _characterArtLibrary = null;
+        _characterOptionBindings.Clear();
     }
 
     private void SetText(Transform rootTransform, string path, string text)
@@ -389,6 +464,18 @@ public sealed class Lobby : UIScript
         return button;
     }
 
+    private Image FindRequiredImage(string path)
+    {
+        Transform targetTransform = FindRequiredTransform(ViewTransform, path);
+        Image image = targetTransform.GetComponent<Image>();
+        if (image == null)
+        {
+            throw new System.InvalidOperationException($"Lobby view cannot find Image at path: {path}");
+        }
+
+        return image;
+    }
+
     private Transform FindRequiredTransform(string path)
     {
         return FindRequiredTransform(ViewTransform, path);
@@ -403,5 +490,34 @@ public sealed class Lobby : UIScript
         }
 
         return targetTransform;
+    }
+
+    private string GetCharacterDisplayName(string characterId)
+    {
+        switch (characterId)
+        {
+            case "character_1":
+                return "福童";
+            case "character_2":
+                return "沪上阿姨";
+            default:
+                return "角色";
+        }
+    }
+
+    private sealed class CharacterOptionBinding
+    {
+        public string CharacterId { get; }
+        public Button Button { get; }
+        public Image PortraitImage { get; }
+        public TMP_Text LabelText { get; }
+
+        public CharacterOptionBinding(string characterId, Button button, Image portraitImage, TMP_Text labelText)
+        {
+            CharacterId = characterId;
+            Button = button;
+            PortraitImage = portraitImage;
+            LabelText = labelText;
+        }
     }
 }

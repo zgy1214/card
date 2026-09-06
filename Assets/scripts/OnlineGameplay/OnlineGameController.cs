@@ -20,6 +20,8 @@ public sealed class OnlineGameController
     public event Action RoomLeft;
     public event Action MatchStarted;
     public event Action MatchEnded;
+    public event Action<NetworkRoomChatPayload> RoomChatReceived;
+    public event Action<NetworkGameChatPayload> GameChatReceived;
     public event Action<string> ErrorOccurred;
 
     public OnlineGameController(LaunchConfig gameLaunchConfig)
@@ -27,9 +29,10 @@ public sealed class OnlineGameController
         _gameLaunchConfig = gameLaunchConfig ?? throw new ArgumentNullException(nameof(gameLaunchConfig));
         GameSession.Initialize(new[]
         {
-            new PlayerRuntime("player0", 0, false, 1),
-            new PlayerRuntime("player1", 1, false, 1),
-            new PlayerRuntime("player2", 2, false, 1)
+            new PlayerRuntime("player0", 0, false),
+            new PlayerRuntime("player1", 1, false),
+            new PlayerRuntime("player2", 2, false),
+            new PlayerRuntime("player3", 3, false)
         });
         _gameSessionSynchronizer = new GameSessionSynchronizer(GameSession);
     }
@@ -73,6 +76,14 @@ public sealed class OnlineGameController
         FireAndForget(
             SendTextAsync(NetworkProtocolMessages.SerializeRoomCreateRequest(normalizedRoomName)),
             "Failed to create room.");
+    }
+
+    public void SetCharacter(string characterId)
+    {
+        LocalPlayerProfile.SetCharacterId(characterId);
+        FireAndForget(
+            SendTextAsync(NetworkProtocolMessages.SerializeProfileSetCharacterRequest(LocalPlayerProfile.CharacterId)),
+            "Failed to update character.");
     }
 
     public void JoinRoom(string roomId)
@@ -128,18 +139,6 @@ public sealed class OnlineGameController
             "Failed to add AI.");
     }
 
-    public void RemoveAI(int seatIndex)
-    {
-        if (!RoomModel.HasRoom)
-        {
-            return;
-        }
-
-        FireAndForget(
-            SendTextAsync(NetworkProtocolMessages.SerializeRoomRemoveAiRequest(RoomModel.RoomId, seatIndex)),
-            "Failed to remove AI.");
-    }
-
     public void StartRoomGame()
     {
         if (!RoomModel.HasRoom)
@@ -150,6 +149,24 @@ public sealed class OnlineGameController
         FireAndForget(
             SendTextAsync(NetworkProtocolMessages.SerializeRoomStartGameRequest(RoomModel.RoomId)),
             "Failed to start room game.");
+    }
+
+    public void SendRoomChat(string message)
+    {
+        if (!RoomModel.HasRoom)
+        {
+            return;
+        }
+
+        string trimmedMessage = string.IsNullOrEmpty(message) ? string.Empty : message.Trim();
+        if (string.IsNullOrEmpty(trimmedMessage))
+        {
+            return;
+        }
+
+        FireAndForget(
+            SendTextAsync(NetworkProtocolMessages.SerializeRoomChatRequest(RoomModel.RoomId, trimmedMessage)),
+            "Failed to send room chat.");
     }
 
     public void StartMatchmaking()
@@ -167,23 +184,73 @@ public sealed class OnlineGameController
             "Failed to cancel matchmaking.");
     }
 
-    public void PlayCard(string cardId)
+    public void SubmitPlay(string[] cardIds, string faceUpCardId)
     {
-        if (string.IsNullOrEmpty(cardId))
+        if (cardIds == null || cardIds.Length == 0)
         {
-            Debug.LogWarning("Cannot send game/play_card without a card id.");
+            PublishError("请选择至少一张手牌。");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(faceUpCardId))
+        {
+            PublishError("请选择一张明牌。");
             return;
         }
 
         if (string.IsNullOrEmpty(GameSession.MatchId))
         {
-            Debug.LogWarning("Cannot send game/play_card because there is no active match id.");
+            Debug.LogWarning("Cannot send game/submit_play because there is no active match id.");
             return;
         }
 
         FireAndForget(
-            SendTextAsync(NetworkProtocolMessages.SerializePlayCardRequest(GameSession.MatchId, cardId)),
-            "Failed to send game/play_card.");
+            SendTextAsync(NetworkProtocolMessages.SerializeSubmitPlayRequest(GameSession.MatchId, cardIds, faceUpCardId)),
+            "Failed to send game/submit_play.");
+    }
+
+    public void SubmitChallenge(int targetSeatIndex)
+    {
+        if (string.IsNullOrEmpty(GameSession.MatchId))
+        {
+            Debug.LogWarning("Cannot send game/submit_challenge because there is no active match id.");
+            return;
+        }
+
+        FireAndForget(
+            SendTextAsync(NetworkProtocolMessages.SerializeSubmitChallengeRequest(GameSession.MatchId, targetSeatIndex)),
+            "Failed to send game/submit_challenge.");
+    }
+
+    public void SubmitFortuneDraw(int drawCount)
+    {
+        if (string.IsNullOrEmpty(GameSession.MatchId))
+        {
+            Debug.LogWarning("Cannot send game/submit_fortune_draw because there is no active match id.");
+            return;
+        }
+
+        FireAndForget(
+            SendTextAsync(NetworkProtocolMessages.SerializeSubmitFortuneDrawRequest(GameSession.MatchId, drawCount)),
+            "Failed to send game/submit_fortune_draw.");
+    }
+
+    public void SendGameChat(string message)
+    {
+        if (string.IsNullOrEmpty(GameSession.MatchId))
+        {
+            return;
+        }
+
+        string trimmedMessage = string.IsNullOrEmpty(message) ? string.Empty : message.Trim();
+        if (string.IsNullOrEmpty(trimmedMessage))
+        {
+            return;
+        }
+
+        FireAndForget(
+            SendTextAsync(NetworkProtocolMessages.SerializeGameChatRequest(GameSession.MatchId, trimmedMessage)),
+            "Failed to send game/chat.");
     }
 
     public void LeaveGame()
@@ -226,7 +293,8 @@ public sealed class OnlineGameController
         await _webSocketTransport.SendTextAsync(
             NetworkProtocolMessages.SerializeSessionHello(
                 LocalPlayerProfile.PlayerId,
-                LocalPlayerProfile.Name));
+                LocalPlayerProfile.Name,
+                LocalPlayerProfile.CharacterId));
     }
 
     private async Task EnsureConnectedAsync()
@@ -286,6 +354,9 @@ public sealed class OnlineGameController
             case NetworkProtocolMessages.RoomState:
                 HandleRoomState(rawMessage);
                 return;
+            case NetworkProtocolMessages.RoomChatMessage:
+                HandleRoomChatMessage(rawMessage);
+                return;
             case NetworkProtocolMessages.MatchmakingState:
                 HandleMatchmakingState(rawMessage);
                 return;
@@ -295,20 +366,14 @@ public sealed class OnlineGameController
             case NetworkProtocolMessages.GameMatchStart:
                 HandleMatchStart(rawMessage);
                 return;
-            case NetworkProtocolMessages.GameMatchState:
-                HandleMatchState(rawMessage);
+            case NetworkProtocolMessages.GameState:
+                HandleGameState(rawMessage);
                 return;
-            case NetworkProtocolMessages.GameTurnStart:
-                HandleTurnStart(rawMessage);
-                return;
-            case NetworkProtocolMessages.GameCardPlayed:
-                HandleCardPlayed(rawMessage);
+            case NetworkProtocolMessages.GameChat:
+                HandleGameChat(rawMessage);
                 return;
             case NetworkProtocolMessages.GamePlayerReplacedByAi:
                 HandlePlayerReplacedByAi(rawMessage);
-                return;
-            case NetworkProtocolMessages.GameMatchEnd:
-                HandleMatchEnd(rawMessage);
                 return;
             case NetworkProtocolMessages.Error:
                 HandleError(rawMessage);
@@ -329,6 +394,7 @@ public sealed class OnlineGameController
         }
 
         LobbyModel.SetSessionReady(true);
+        LocalPlayerProfile.SetCharacterId(message.payload.character_id);
         RequestRoomList();
     }
 
@@ -359,6 +425,18 @@ public sealed class OnlineGameController
         {
             RoomEntered?.Invoke();
         }
+    }
+
+    private void HandleRoomChatMessage(string rawMessage)
+    {
+        NetworkRoomChatMessage message = JsonUtility.FromJson<NetworkRoomChatMessage>(rawMessage);
+        if (message?.payload == null)
+        {
+            Debug.LogWarning("Received invalid room/chat_message payload.");
+            return;
+        }
+
+        RoomChatReceived?.Invoke(message.payload);
     }
 
     private void HandleMatchmakingState(string rawMessage)
@@ -399,40 +477,28 @@ public sealed class OnlineGameController
         RoomModel.Clear();
     }
 
-    private void HandleMatchState(string rawMessage)
+    private void HandleGameState(string rawMessage)
     {
-        NetworkMatchStateMessage message = JsonUtility.FromJson<NetworkMatchStateMessage>(rawMessage);
+        NetworkGameStateMessage message = JsonUtility.FromJson<NetworkGameStateMessage>(rawMessage);
         if (message?.payload == null)
         {
-            Debug.LogWarning("Received invalid game/match_state payload.");
+            Debug.LogWarning("Received invalid game/state payload.");
             return;
         }
 
-        _gameSessionSynchronizer.ApplyMatchState(message.payload);
+        _gameSessionSynchronizer.ApplyGameState(message.payload);
     }
 
-    private void HandleTurnStart(string rawMessage)
+    private void HandleGameChat(string rawMessage)
     {
-        NetworkTurnStartMessage message = JsonUtility.FromJson<NetworkTurnStartMessage>(rawMessage);
+        NetworkGameChatMessage message = JsonUtility.FromJson<NetworkGameChatMessage>(rawMessage);
         if (message?.payload == null)
         {
-            Debug.LogWarning("Received invalid game/turn_start payload.");
+            Debug.LogWarning("Received invalid game/chat payload.");
             return;
         }
 
-        _gameSessionSynchronizer.ApplyTurnStart(message.payload);
-    }
-
-    private void HandleCardPlayed(string rawMessage)
-    {
-        NetworkCardPlayedMessage message = JsonUtility.FromJson<NetworkCardPlayedMessage>(rawMessage);
-        if (message?.payload == null)
-        {
-            Debug.LogWarning("Received invalid game/card_played payload.");
-            return;
-        }
-
-        _gameSessionSynchronizer.ApplyCardPlayed(message.payload);
+        GameChatReceived?.Invoke(message.payload);
     }
 
     private void HandlePlayerReplacedByAi(string rawMessage)
@@ -445,20 +511,6 @@ public sealed class OnlineGameController
         }
 
         Debug.Log($"Player at seat {message.payload.seat_index} was replaced by AI.");
-    }
-
-    private void HandleMatchEnd(string rawMessage)
-    {
-        NetworkMatchEndMessage message = JsonUtility.FromJson<NetworkMatchEndMessage>(rawMessage);
-        if (message?.payload == null)
-        {
-            Debug.LogWarning("Received invalid game/match_end payload.");
-            return;
-        }
-
-        _gameSessionSynchronizer.ApplyMatchEnd(message.payload);
-        MatchEnded?.Invoke();
-        RequestRoomList();
     }
 
     private void HandleError(string rawMessage)
