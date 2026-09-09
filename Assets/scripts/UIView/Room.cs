@@ -16,7 +16,6 @@ public sealed class Room : UIScript
     private TMP_Text _roomStatusText;
     private Button _leaveButton;
     private Button _readyButton;
-    private Button _addAiButton;
     private Button _startGameButton;
     private TMP_InputField _chatInput;
     private Button _sendChatButton;
@@ -47,22 +46,21 @@ public sealed class Room : UIScript
     private void BindNodes()
     {
         _characterArtLibrary = ViewGameObject.GetComponent<CharacterArtLibrary>();
-        _roomNameText = FindRequiredText("root/panel_header/txt_room_name");
-        _roomIdText = FindRequiredText("root/panel_header/txt_room_id");
+        _roomNameText = FindRequiredText("root/group_header/txt_room_name");
+        _roomIdText = FindRequiredText("root/group_header/txt_room_id");
         _roomStatusText = FindRequiredText("root/txt_room_status");
-        _leaveButton = FindRequiredButton("root/panel_header/btn_leave");
-        _readyButton = FindRequiredButton("root/panel_controls/btn_ready");
-        _addAiButton = FindRequiredButton("root/panel_controls/btn_add_ai");
-        _startGameButton = FindRequiredButton("root/panel_controls/btn_start_game");
-        _chatFontAsset = FindRequiredText("root/panel_chat/txt_chat_title").font;
-        _chatScrollRect = FindRequiredScrollRect("root/panel_chat/scroll_chat");
-        _chatInput = FindRequiredInput("root/panel_chat/panel_chat_input/input_chat");
-        _sendChatButton = FindRequiredButton("root/panel_chat/panel_chat_input/btn_send_chat");
-        _chatContentTransform = FindRequiredTransform("root/panel_chat/scroll_chat/viewport/content");
+        _leaveButton = FindRequiredButton("root/group_header/btn_leave");
+        _readyButton = FindRequiredButton("root/group_bottom/group_room_actions/btn_ready");
+        _startGameButton = FindRequiredButton("root/group_bottom/group_room_actions/btn_start_game");
+        _chatFontAsset = FindRequiredText("root/group_bottom/group_chat/txt_chat_title").font;
+        _chatScrollRect = FindRequiredScrollRect("root/group_bottom/group_chat/scroll_chat");
+        _chatInput = FindRequiredInput("root/group_bottom/group_chat/group_chat_input/input_chat");
+        _sendChatButton = FindRequiredButton("root/group_bottom/group_chat/group_chat_input/btn_send_chat");
+        _chatContentTransform = FindRequiredTransform("root/group_bottom/group_chat/scroll_chat/viewport/content");
 
         for (int seatIndex = 0; seatIndex < SeatCount; seatIndex += 1)
         {
-            Transform slotTransform = FindRequiredTransform($"root/panel_players/slot_player{seatIndex}");
+            Transform slotTransform = FindRequiredTransform($"root/group_player_seats/slot_player{seatIndex}");
             _seatBindings.Add(new SeatBinding(
                 seatIndex,
                 FindRequiredImage(slotTransform, "img_character"),
@@ -74,7 +72,6 @@ public sealed class Room : UIScript
 
         _leaveButton.onClick.AddListener(OnClickLeave);
         _readyButton.onClick.AddListener(OnClickReady);
-        _addAiButton.onClick.AddListener(OnClickAddAI);
         _startGameButton.onClick.AddListener(OnClickStartGame);
         _sendChatButton.onClick.AddListener(OnClickSendChat);
         _chatInput.onSubmit.AddListener(OnSubmitChat);
@@ -131,9 +128,6 @@ public sealed class Room : UIScript
         _readyButton.gameObject.SetActive(!isLocalOwner);
         _readyButton.interactable = roomModel.CanLocalReady(localPlayerId);
         SetButtonLabel(_readyButton, localPlayer != null && localPlayer.IsReady ? "取消准备" : "准备");
-
-        _addAiButton.gameObject.SetActive(isLocalOwner);
-        _addAiButton.interactable = roomModel.CanLocalAddAI(localPlayerId);
 
         _startGameButton.gameObject.SetActive(isLocalOwner);
         _startGameButton.interactable = roomModel.CanLocalStartGame(localPlayerId);
@@ -208,11 +202,6 @@ public sealed class Room : UIScript
         }
 
         controller.SetReady(!localPlayer.IsReady);
-    }
-
-    private void OnClickAddAI()
-    {
-        GameApp.Current?.OnlineGameController?.AddAI();
     }
 
     private void OnClickStartGame()
@@ -308,11 +297,6 @@ public sealed class Room : UIScript
             _readyButton.onClick.RemoveListener(OnClickReady);
         }
 
-        if (_addAiButton != null)
-        {
-            _addAiButton.onClick.RemoveListener(OnClickAddAI);
-        }
-
         if (_startGameButton != null)
         {
             _startGameButton.onClick.RemoveListener(OnClickStartGame);
@@ -339,7 +323,6 @@ public sealed class Room : UIScript
         _roomStatusText = null;
         _leaveButton = null;
         _readyButton = null;
-        _addAiButton = null;
         _startGameButton = null;
         _chatInput = null;
         _sendChatButton = null;

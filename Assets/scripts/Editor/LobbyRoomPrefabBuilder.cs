@@ -10,9 +10,24 @@ public static class LobbyRoomPrefabBuilder
     private const string ViewFolder = "Assets/Prefabs/view";
     private const string TemplateFolder = "Assets/Prefabs/template";
     private const string UiFontAssetPath = "Assets/Fonts/WN-Sans-SC-Medium SDF.asset";
-    private const string LobbyBackgroundPath = "Assets/Arts/lobby/bg_1.png";
-    private const string CharacterOnePath = "Assets/Arts/character_1.png";
-    private const string CharacterTwoPath = "Assets/Arts/chrarcter_2.png";
+    private const string LobbyBackgroundPath = "Assets/Arts/Lobby/background.png";
+    private const string LobbyTitlePath = "Assets/Arts/Start/title.png";
+    private const string LobbyPreviousPath = "Assets/Arts/Lobby/character_previous.png";
+    private const string LobbyNextPath = "Assets/Arts/Lobby/character_next.png";
+    private const string LobbyEditNamePath = "Assets/Arts/Lobby/edit_name.png";
+    private const string RoomBackgroundPath = "Assets/Arts/Room/States/Ready/layer_hash_071039.png";
+    private const string RoomPanelPath = "Assets/Arts/Room/States/Ready/panel_room.png";
+    private const string RoomChatPanelPath = "Assets/Arts/Room/States/Ready/panel_chat.png";
+    private const string RoomSlotPanelPath = "Assets/Arts/Room/States/Ready/panel_slot.png";
+    private const string RoomBackButtonPath = "Assets/Arts/Room/States/Ready/button_back.png";
+    private const string RoomHomeButtonPath = "Assets/Arts/Room/States/Ready/button_home.png";
+    private const string RoomSendButtonPath = "Assets/Arts/Room/States/Ready/button_send.png";
+    private const string RoomCharacterOnePath = "Assets/Arts/Room/States/Ready/character_art_1.png";
+    private const string RoomCharacterTwoPath = "Assets/Arts/Room/States/Ready/character_art_2.png";
+    private const string RoomSlotShadowOnePath = "Assets/Arts/Room/States/Ready/character_slot_shadow_1.png";
+    private const string RoomSlotShadowTwoPath = "Assets/Arts/Room/States/Ready/character_slot_shadow_2.png";
+    private const string RoomSlotShadowThreePath = "Assets/Arts/Room/States/Ready/character_slot_shadow_3.png";
+    private const string RoomSlotShadowFourPath = "Assets/Arts/Room/States/Ready/character_slot_shadow_4.png";
 
     private static readonly Color CardRed = new Color32(120, 28, 24, 236);
     private static readonly Color CardRedDark = new Color32(78, 21, 20, 242);
@@ -53,8 +68,23 @@ public static class LobbyRoomPrefabBuilder
     private static void EnsureSpriteImportSettings()
     {
         EnsureSpriteImportSettings(LobbyBackgroundPath, 4096);
-        EnsureSpriteImportSettings(CharacterOnePath, 2048);
-        EnsureSpriteImportSettings(CharacterTwoPath, 2048);
+        EnsureSpriteImportSettings(LobbyTitlePath, 2048);
+        EnsureSpriteImportSettings(LobbyPreviousPath, 256);
+        EnsureSpriteImportSettings(LobbyNextPath, 256);
+        EnsureSpriteImportSettings(LobbyEditNamePath, 256);
+        EnsureSpriteImportSettings(RoomBackgroundPath, 4096);
+        EnsureSpriteImportSettings(RoomPanelPath, 256);
+        EnsureSpriteImportSettings(RoomChatPanelPath, 512);
+        EnsureSpriteImportSettings(RoomSlotPanelPath, 256);
+        EnsureSpriteImportSettings(RoomBackButtonPath, 256);
+        EnsureSpriteImportSettings(RoomHomeButtonPath, 128);
+        EnsureSpriteImportSettings(RoomSendButtonPath, 128);
+        EnsureSpriteImportSettings(RoomCharacterOnePath, 1024);
+        EnsureSpriteImportSettings(RoomCharacterTwoPath, 1024);
+        EnsureSpriteImportSettings(RoomSlotShadowOnePath, 512);
+        EnsureSpriteImportSettings(RoomSlotShadowTwoPath, 512);
+        EnsureSpriteImportSettings(RoomSlotShadowThreePath, 512);
+        EnsureSpriteImportSettings(RoomSlotShadowFourPath, 512);
     }
 
     private static void EnsureSpriteImportSettings(string assetPath, int maxTextureSize)
@@ -103,143 +133,118 @@ public static class LobbyRoomPrefabBuilder
         AddCharacterLibrary(lobby);
         Transform root = lobby.transform.Find("root");
 
-        CreateImage(root, "bg", Color.white, Vector2.zero, Vector2.one, Sprite(LobbyBackgroundPath));
-        CreateImage(root, "bg_warm_vignette", new Color32(74, 12, 9, 88), Vector2.zero, Vector2.one);
+        CreateImage(root, "image_background", Color.white, Vector2.zero, Vector2.one, Sprite(LobbyBackgroundPath));
 
-        GameObject titleBand = CreatePanel(root, "panel_title_band", new Color32(86, 20, 18, 170));
-        SetRect(titleBand, new Vector2(0, 0.86f), new Vector2(1, 1));
-        CreateText(titleBand.transform, "txt_title", "溜小3", 58, TextAlignmentOptions.Center, Gold);
-        SetRect(titleBand.transform.Find("txt_title").gameObject, Vector2.zero, Vector2.one);
+        GameObject characterStage = CreateGroup(root, "group_character_stage");
+        SetRect(characterStage, new Vector2(0.02f, 0.05f), new Vector2(0.53f, 0.95f));
+        CreateImage(characterStage.transform, "image_character", Color.white, new Vector2(0.10f, 0.02f), new Vector2(0.92f, 0.90f), Sprite(RoomCharacterOnePath));
+        GameObject previous = CreateButton(characterStage.transform, "btn_character_previous", "", Color.white, 72, 88, Color.white);
+        previous.GetComponent<Image>().sprite = Sprite(LobbyPreviousPath);
+        previous.GetComponent<Image>().preserveAspect = true;
+        previous.transform.Find("txt_label").gameObject.SetActive(false);
+        SetRect(previous, new Vector2(0.02f, 0.42f), new Vector2(0.02f, 0.42f), new Vector2(0.5f, 0.5f), Vector2.zero);
+        GameObject next = CreateButton(characterStage.transform, "btn_character_next", "", Color.white, 72, 88, Color.white);
+        next.GetComponent<Image>().sprite = Sprite(LobbyNextPath);
+        next.GetComponent<Image>().preserveAspect = true;
+        next.transform.Find("txt_label").gameObject.SetActive(false);
+        SetRect(next, new Vector2(0.96f, 0.42f), new Vector2(0.96f, 0.42f), new Vector2(0.5f, 0.5f), Vector2.zero);
 
-        GameObject profile = CreatePanel(root, "panel_profile", new Color32(96, 27, 24, 218));
-        SetRect(profile, new Vector2(0.045f, 0.10f), new Vector2(0.34f, 0.84f));
-        AddVerticalLayout(profile, 14, new RectOffset(22, 22, 20, 20), TextAnchor.UpperCenter, true, false);
+        GameObject identity = CreateGroup(characterStage.transform, "group_player_identity");
+        SetRect(identity, new Vector2(0.28f, 0.91f), new Vector2(0.72f, 0.99f));
+        CreateText(identity.transform, "txt_player_name", "player_A7K2", 30, TextAlignmentOptions.MidlineRight, CardRedDark);
+        SetRect(identity.transform.Find("txt_player_name").gameObject, new Vector2(0.02f, 0), new Vector2(0.78f, 1));
+        GameObject editName = CreateButton(identity.transform, "btn_edit_name", "", Color.white, 48, 48, CardRedDark);
+        editName.GetComponent<Image>().sprite = Sprite(LobbyEditNamePath);
+        editName.GetComponent<Image>().preserveAspect = true;
+        editName.transform.Find("txt_label").gameObject.SetActive(false);
+        SetRect(identity.transform.Find("btn_edit_name").gameObject, new Vector2(0.82f, 0.5f), new Vector2(0.82f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero);
+        GameObject nameInput = CreateInput(identity.transform, "input_player_name", "输入昵称", 280, 48);
+        SetRect(nameInput, new Vector2(0.05f, 0.5f), new Vector2(0.95f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero);
+        nameInput.SetActive(false);
 
-        GameObject showcase = CreatePanel(profile.transform, "panel_character_showcase", new Color32(255, 232, 184, 52));
-        SetFixedHeight(showcase, 445);
-        CreateImage(showcase.transform, "img_character", Color.white, new Vector2(0.10f, 0.12f), new Vector2(0.90f, 0.94f), Sprite(CharacterOnePath));
-        CreateText(showcase.transform, "txt_character_name", "福童", 30, TextAlignmentOptions.Center, Cream);
-        SetRect(showcase.transform.Find("txt_character_name").gameObject, new Vector2(0.08f, 0.02f), new Vector2(0.92f, 0.13f));
+        GameObject logo = CreateImage(root, "image_logo", Color.white, new Vector2(0.51f, 0.62f), new Vector2(0.94f, 0.94f), Sprite(LobbyTitlePath));
+        SetRaycastTarget(logo, false);
 
-        GameObject picker = CreatePanel(profile.transform, "panel_character_picker", new Color(1, 1, 1, 0));
-        SetFixedHeight(picker, 160);
-        AddHorizontalLayout(picker, 10, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
-        for (int index = 0; index < ActiveCharacterCount; index += 1)
-        {
-            GameObject option = CreateButton(picker.transform, $"btn_character{index}", "", CardRed, 0, 140);
-            SetFlexible(option, 1, 0);
-            Sprite sprite = index % 2 == 0 ? Sprite(CharacterOnePath) : Sprite(CharacterTwoPath);
-            CreateImage(option.transform, "img_portrait", Color.white, new Vector2(0.12f, 0.25f), new Vector2(0.88f, 0.94f), sprite);
-            TMP_Text optionLabel = option.transform.Find("txt_label").GetComponent<TMP_Text>();
-            optionLabel.text = CharacterDisplayName(index);
-            optionLabel.fontSize = 18;
-            SetRect(option.transform.Find("txt_label").gameObject, new Vector2(0, 0.02f), new Vector2(1, 0.25f));
-        }
+        GameObject topActions = CreateGroup(root, "group_top_actions");
+        SetRect(topActions, new Vector2(0.87f, 0.88f), new Vector2(0.98f, 0.98f));
+        CreateButton(topActions.transform, "btn_help", "?", new Color(1, 1, 1, 0), 64, 64, CardRedDark);
+        GameObject settings = CreateButton(topActions.transform, "btn_settings", "⚙", new Color(1, 1, 1, 0), 64, 64, CardRedDark);
+        SetRect(settings, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(66, 0));
 
-        GameObject actions = CreatePanel(root, "panel_actions", new Color32(85, 22, 20, 224));
-        SetRect(actions, new Vector2(0.365f, 0.10f), new Vector2(0.62f, 0.84f));
-        AddVerticalLayout(actions, 18, new RectOffset(22, 22, 20, 20), TextAnchor.UpperCenter, true, false);
+        GameObject actions = CreateGroup(root, "group_main_actions");
+        SetRect(actions, new Vector2(0.51f, 0.18f), new Vector2(0.95f, 0.58f));
+        GameObject join = CreateButton(actions.transform, "btn_join_room", "加入房间", new Color32(247, 190, 45, 255), 300, 105, CardRedDark);
+        SetRect(join, new Vector2(0.02f, 0.56f), new Vector2(0.46f, 0.90f));
+        GameObject create = CreateButton(actions.transform, "btn_create_room", "创建房间", new Color32(52, 155, 229, 255), 300, 105, Color.white);
+        SetRect(create, new Vector2(0.54f, 0.56f), new Vector2(0.98f, 0.90f));
+        GameObject matchmaking = CreateButton(actions.transform, "btn_matchmaking", "随机匹配", new Color32(150, 65, 211, 255), 300, 105, Color.white);
+        SetRect(matchmaking, new Vector2(0.02f, 0.08f), new Vector2(0.46f, 0.42f));
+        GameObject rules = CreateButton(actions.transform, "btn_rules", "规则说明", new Color32(245, 90, 74, 255), 300, 105, Color.white);
+        SetRect(rules, new Vector2(0.54f, 0.08f), new Vector2(0.98f, 0.42f));
 
-        GameObject playerInfo = CreatePanel(actions.transform, "panel_player_info", CardRedDark);
-        SetFixedHeight(playerInfo, 150);
-        AddVerticalLayout(playerInfo, 8, new RectOffset(18, 18, 14, 14), TextAnchor.UpperLeft, true, false);
-        CreateText(playerInfo.transform, "txt_player_name", "player_A7K2", 30, TextAlignmentOptions.Left, Cream);
-        CreateText(playerInfo.transform, "txt_player_id", "ID: ------", 18, TextAlignmentOptions.Left, MutedCream);
-        CreateText(playerInfo.transform, "txt_connection_status", "连接中...", 18, TextAlignmentOptions.Left, MutedCream);
-        CreateButton(playerInfo.transform, "btn_profile", "个人信息", CardRedLight, -1, 42);
-
-        GameObject matchmaking = CreatePanel(actions.transform, "panel_matchmaking", CardRedDark);
-        SetFixedHeight(matchmaking, 145);
-        AddVerticalLayout(matchmaking, 10, new RectOffset(18, 18, 16, 16), TextAnchor.UpperCenter, true, false);
-        CreateButton(matchmaking.transform, "btn_matchmaking", "快速匹配", GoldMuted, -1, 58, Ink);
-        CreateText(matchmaking.transform, "txt_matchmaking_status", "空闲", 20, TextAlignmentOptions.Center, MutedCream);
-
-        GameObject joinRoom = CreatePanel(actions.transform, "panel_join_room", CardRedDark);
-        SetFixedHeight(joinRoom, 145);
-        AddVerticalLayout(joinRoom, 10, new RectOffset(18, 18, 16, 16), TextAnchor.UpperLeft, true, false);
-        CreateText(joinRoom.transform, "txt_join_title", "加入房间", 22, TextAlignmentOptions.Left, Cream);
-        GameObject joinRow = CreateHorizontalGroup(joinRoom.transform, "panel_join_row", 10, 52);
-        CreateInput(joinRow.transform, "input_room_id", "输入房间号", 0, 50);
-        CreateButton(joinRow.transform, "btn_join_room", "加入", GoldMuted, 92, 50, Ink);
-
-        GameObject createRoom = CreatePanel(actions.transform, "panel_create_room", CardRedDark);
-        SetFixedHeight(createRoom, 165);
-        AddVerticalLayout(createRoom, 10, new RectOffset(18, 18, 16, 16), TextAnchor.UpperLeft, true, false);
-        CreateText(createRoom.transform, "txt_create_title", "创建房间", 22, TextAlignmentOptions.Left, Cream);
-        CreateInput(createRoom.transform, "input_room_name", "房间名称", -1, 46);
-        CreateButton(createRoom.transform, "btn_create_room", "开一桌", GoldMuted, -1, 50, Ink);
-
-        GameObject roomList = CreatePanel(root, "panel_room_list", new Color32(76, 22, 20, 226));
-        SetRect(roomList, new Vector2(0.645f, 0.10f), new Vector2(0.955f, 0.84f));
-        AddVerticalLayout(roomList, 12, new RectOffset(20, 20, 18, 20), TextAnchor.UpperLeft, true, false);
-
-        GameObject roomHeader = CreatePanel(roomList.transform, "panel_room_list_header", CardRedDark);
-        SetFixedHeight(roomHeader, 66);
-        AddHorizontalLayout(roomHeader, 12, new RectOffset(14, 14, 8, 8), TextAnchor.MiddleCenter);
-        CreateText(roomHeader.transform, "txt_title", "房间列表", 28, TextAlignmentOptions.MidlineLeft, Cream);
-        CreateButton(roomHeader.transform, "btn_refresh", "刷新", CardRedLight, 110, 48);
-
-        GameObject scroll = CreateScrollView(roomList.transform, "scroll_room_list", new Color32(59, 16, 14, 180));
-        SetFlexible(scroll, 1, 1);
-        CreateText(roomList.transform, "txt_empty_hint", "暂无可加入房间", 21, TextAlignmentOptions.Center, MutedCream);
-
+        CreateText(root, "txt_matchmaking_status", "", 18, TextAlignmentOptions.Center, CardRedDark);
+        root.Find("txt_matchmaking_status").gameObject.SetActive(false);
         SavePrefab(lobby, $"{ViewFolder}/Lobby.prefab");
     }
-
     private static void BuildRoomPrefab()
     {
         GameObject room = CreateViewRoot("Room");
         AddCharacterLibrary(room);
         Transform root = room.transform.Find("root");
 
-        CreateImage(root, "bg", Color.white, Vector2.zero, Vector2.one, Sprite(LobbyBackgroundPath));
-        CreateImage(root, "bg_dim", new Color32(58, 8, 7, 118), Vector2.zero, Vector2.one);
+        CreateImage(root, "image_background", Color.white, Vector2.zero, Vector2.one, Sprite(RoomBackgroundPath));
 
-        GameObject header = CreatePanel(root, "panel_header", new Color32(82, 20, 18, 225));
-        SetRect(header, new Vector2(0.04f, 0.84f), new Vector2(0.96f, 0.95f));
-        AddHorizontalLayout(header, 14, new RectOffset(20, 20, 10, 10), TextAnchor.MiddleCenter);
-        CreateText(header.transform, "txt_room_name", "房间名称", 30, TextAlignmentOptions.MidlineLeft, Cream);
-        CreateText(header.transform, "txt_room_id", "房间号 1234", 22, TextAlignmentOptions.MidlineLeft, MutedCream, 210, -1);
-        CreateButton(header.transform, "btn_leave", "离开", Danger, 110, 52);
+        GameObject header = CreateGroup(root, "group_header");
+        SetRect(header, new Vector2(0.04f, 0.87f), new Vector2(0.96f, 0.97f));
+        CreateText(header.transform, "txt_room_name", "房间名称", 32, TextAlignmentOptions.MidlineLeft, Cream);
+        SetRect(header.transform.Find("txt_room_name").gameObject, new Vector2(0.02f, 0), new Vector2(0.34f, 1));
+        CreateText(header.transform, "txt_room_id", "房间号 1234", 22, TextAlignmentOptions.Center, MutedCream);
+        SetRect(header.transform.Find("txt_room_id").gameObject, new Vector2(0.35f, 0), new Vector2(0.65f, 1));
+        CreateButton(header.transform, "btn_leave", "离开", new Color32(222, 76, 63, 255), 120, 54);
+        SetRect(header.transform.Find("btn_leave").gameObject, new Vector2(0.86f, 0.5f), new Vector2(0.86f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero);
+        SetButtonSprite(header.transform.Find("btn_leave").gameObject, Sprite(RoomBackButtonPath));
 
-        GameObject players = CreatePanel(root, "panel_players", new Color32(105, 28, 23, 190));
-        SetRect(players, new Vector2(0.04f, 0.35f), new Vector2(0.96f, 0.80f));
-        AddHorizontalLayout(players, 18, new RectOffset(20, 20, 18, 18), TextAnchor.MiddleCenter, true);
+        GameObject roomPanel = CreateSlicedImage(root, "panel_room", Color.white, new Vector2(0.045f, 0.17f), new Vector2(0.74f, 0.85f), Sprite(RoomPanelPath));
+        SetRaycastTarget(roomPanel, false);
+        GameObject seats = CreateGroup(root, "group_player_seats");
+        SetRect(seats, new Vector2(0.09f, 0.25f), new Vector2(0.70f, 0.80f));
+        AddHorizontalLayout(seats, 18, new RectOffset(12, 12, 12, 12), TextAnchor.MiddleCenter, true);
         for (int index = 0; index < 4; index += 1)
         {
-            GameObject slot = CreateRoomSlot(players.transform, $"slot_player{index}", index);
+            GameObject slot = CreateRoomSlot(seats.transform, $"slot_player{index}", index);
             SetEqualSlotLayout(slot);
         }
 
-        GameObject chat = CreatePanel(root, "panel_chat", new Color32(66, 18, 16, 222));
-        SetRect(chat, new Vector2(0.04f, 0.08f), new Vector2(0.54f, 0.31f));
-        AddVerticalLayout(chat, 8, new RectOffset(16, 16, 12, 12), TextAnchor.UpperLeft, true, false);
+        CreateText(root, "txt_room_status", "等待玩家加入", 24, TextAlignmentOptions.Center, Cream);
+        SetRect(root.Find("txt_room_status").gameObject, new Vector2(0.16f, 0.18f), new Vector2(0.63f, 0.24f));
+
+        GameObject bottom = CreateGroup(root, "group_bottom");
+        SetRect(bottom, new Vector2(0.045f, 0.04f), new Vector2(0.955f, 0.15f));
+
+        GameObject chat = CreateSlicedImage(bottom.transform, "group_chat", Color.white, new Vector2(0, 0), new Vector2(0.68f, 1), Sprite(RoomChatPanelPath));
+        AddVerticalLayout(chat, 6, new RectOffset(18, 18, 10, 10), TextAnchor.UpperLeft, true, false);
         CreateText(chat.transform, "txt_chat_title", "房间聊天", 22, TextAlignmentOptions.Left, Gold);
         GameObject scroll = CreateScrollView(chat.transform, "scroll_chat", new Color32(45, 12, 11, 135));
         SetFlexible(scroll, 1, 1);
-        GameObject inputRow = CreateHorizontalGroup(chat.transform, "panel_chat_input", 10, 50);
+        GameObject inputRow = CreateHorizontalGroup(chat.transform, "group_chat_input", 8, 42);
         CreateInput(inputRow.transform, "input_chat", "说点什么...", 0, 48);
-        CreateButton(inputRow.transform, "btn_send_chat", "发送", GoldMuted, 92, 48, Ink);
+        CreateButton(inputRow.transform, "btn_send_chat", "", Color.white, 48, 48);
 
-        GameObject controls = CreatePanel(root, "panel_controls", new Color32(82, 20, 18, 225));
-        SetRect(controls, new Vector2(0.58f, 0.08f), new Vector2(0.96f, 0.22f));
-        AddHorizontalLayout(controls, 14, new RectOffset(18, 18, 14, 14), TextAnchor.MiddleCenter);
+        SetButtonSprite(inputRow.transform.Find("btn_send_chat").gameObject, Sprite(RoomSendButtonPath));
+        GameObject controls = CreateSlicedImage(bottom.transform, "group_room_actions", Color.white, new Vector2(0.71f, 0), new Vector2(1, 1), Sprite(RoomPanelPath));
+        AddHorizontalLayout(controls, 10, new RectOffset(14, 14, 10, 10), TextAnchor.MiddleCenter);
         CreateButton(controls.transform, "btn_ready", "准备", GoldMuted, 170, 56, Ink);
-        CreateButton(controls.transform, "btn_add_ai", "添加AI", CardRedLight, 160, 56);
         CreateButton(controls.transform, "btn_start_game", "开始游戏", GoldMuted, 190, 56, Ink);
-
-        CreateText(root, "txt_room_status", "等待玩家加入", 24, TextAlignmentOptions.Center, Cream);
-        SetRect(root.Find("txt_room_status").gameObject, new Vector2(0.58f, 0.24f), new Vector2(0.96f, 0.31f));
 
         SavePrefab(room, $"{ViewFolder}/Room.prefab");
     }
-
     private static GameObject CreateRoomSlot(Transform parent, string name, int seatIndex)
     {
-        GameObject slot = CreatePanel(parent, name, new Color32(255, 234, 196, 52));
+        GameObject slot = CreateSlicedImage(parent, name, Color.white, Vector2.zero, Vector2.one, Sprite(RoomSlotPanelPath));
         CreateText(slot.transform, "txt_seat", $"座位 {seatIndex + 1}", 22, TextAlignmentOptions.Center, Gold);
         SetRect(slot.transform.Find("txt_seat").gameObject, new Vector2(0.08f, 0.84f), new Vector2(0.92f, 0.98f));
-        CreateImage(slot.transform, "img_character", new Color32(88, 34, 30, 180), new Vector2(0.10f, 0.28f), new Vector2(0.90f, 0.84f));
+        CreateImage(slot.transform, "img_shadow", Color.white, new Vector2(0.08f, 0.20f), new Vector2(0.92f, 0.32f), Sprite(RoomSlotShadowPath(seatIndex)));
+        CreateImage(slot.transform, "img_character", Color.white, new Vector2(0.10f, 0.22f), new Vector2(0.90f, 0.86f));
         CreateText(slot.transform, "txt_name", "等待玩家加入", 22, TextAlignmentOptions.Center, Cream);
         SetRect(slot.transform.Find("txt_name").gameObject, new Vector2(0.08f, 0.16f), new Vector2(0.92f, 0.28f));
         CreateText(slot.transform, "txt_player_type", "-", 18, TextAlignmentOptions.Center, MutedCream);
@@ -295,8 +300,8 @@ public static class LobbyRoomPrefabBuilder
             SerializedProperty entry = entries.GetArrayElementAtIndex(index);
             entry.FindPropertyRelative("_characterId").stringValue = $"character_{index + 1}";
             entry.FindPropertyRelative("_sprite").objectReferenceValue = index % 2 == 0
-                ? Sprite(CharacterOnePath)
-                : Sprite(CharacterTwoPath);
+                ? Sprite(RoomCharacterOnePath)
+                : Sprite(RoomCharacterTwoPath);
             entry.FindPropertyRelative("_roomOffset").vector2Value = index == 1 ? new Vector2(12f, 0f) : Vector2.zero;
             entry.FindPropertyRelative("_roomScale").floatValue = 1f;
         }
@@ -349,6 +354,60 @@ public static class LobbyRoomPrefabBuilder
     private static GameObject CreatePanel(Transform parent, string name, Color color)
     {
         return CreateImage(parent, name, color, Vector2.zero, Vector2.one);
+    }
+
+    private static string RoomSlotShadowPath(int index)
+    {
+        switch (index)
+        {
+            case 0:
+                return RoomSlotShadowOnePath;
+            case 1:
+                return RoomSlotShadowTwoPath;
+            case 2:
+                return RoomSlotShadowThreePath;
+            default:
+                return RoomSlotShadowFourPath;
+        }
+    }
+
+    private static GameObject CreateSlicedImage(Transform parent, string name, Color color, Vector2 anchorMin, Vector2 anchorMax, Sprite sprite)
+    {
+        GameObject imageObject = CreateImage(parent, name, color, anchorMin, anchorMax, sprite);
+        Image image = imageObject.GetComponent<Image>();
+        image.type = Image.Type.Sliced;
+        image.preserveAspect = false;
+        return imageObject;
+    }
+
+    private static void SetButtonSprite(GameObject buttonObject, Sprite sprite)
+    {
+        Image image = buttonObject.GetComponent<Image>();
+        image.sprite = sprite;
+        image.type = Image.Type.Simple;
+        image.preserveAspect = true;
+        image.color = Color.white;
+        Transform label = buttonObject.transform.Find("txt_label");
+        if (label != null)
+        {
+            label.gameObject.SetActive(false);
+        }
+    }
+
+    private static GameObject CreateGroup(Transform parent, string name)
+    {
+        GameObject group = new GameObject(name, typeof(RectTransform));
+        group.transform.SetParent(parent, false);
+        return group;
+    }
+
+    private static void SetRaycastTarget(GameObject target, bool raycastTarget)
+    {
+        Image image = target.GetComponent<Image>();
+        if (image != null)
+        {
+            image.raycastTarget = raycastTarget;
+        }
     }
 
     private static GameObject CreateImage(Transform parent, string name, Color color, Vector2 anchorMin, Vector2 anchorMax, Sprite sprite = null)

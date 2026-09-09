@@ -12,11 +12,14 @@ public static class MultiplayerPrefabBuilder
     private const string FontFolder = "Assets/Fonts";
     private const string UiFontPath = "Assets/Fonts/WN-Sans-SC-Medium.ttf";
     private const string UiFontAssetPath = "Assets/Fonts/WN-Sans-SC-Medium SDF.asset";
-    private const string GameBackgroundPath = "Assets/Arts/game/bg_1.png";
-    private const string CharacterOnePath = "Assets/Arts/character_1.png";
-    private const string CharacterTwoPath = "Assets/Arts/chrarcter_2.png";
-    private const string CardArtFolder = "Assets/Arts/cards/1x";
-    private const string CardBackPath = "Assets/Arts/cards/back.png";
+    private const string GameBackgroundPath = "Assets/Arts/Game/background.png";
+    private const string CharacterOnePath = "Assets/Arts/Room/States/InvitedUnready/character_art_1.png";
+    private const string CharacterTwoPath = "Assets/Arts/Room/States/InvitedUnready/character_art_2.png";
+    private const string CardArtFolder = "Assets/Arts/Cards";
+    private const string CardBackPath = "Assets/Arts/Cards/card_back.png";
+    private const string StartBackgroundPath = "Assets/Arts/Start/background.png";
+    private const string StartTitlePath = "Assets/Arts/Start/title.png";
+    private const string StartButtonPath = "Assets/Arts/Start/button_start.png";
     private static readonly string[] CardSuits = { "spade", "heart", "club", "diamond" };
 
     private static readonly Color BackgroundColor = new Color32(32, 39, 48, 255);
@@ -63,15 +66,26 @@ public static class MultiplayerPrefabBuilder
     {
         GameObject start = CreateViewRoot("Start");
         Transform root = start.transform.Find("root");
-        CreateImage(root, "image_background", PlaceholderBackgroundColor, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        GameObject background = CreateImage(root, "image_background", Color.white, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Sprite(StartBackgroundPath));
+        background.GetComponent<Image>().preserveAspect = false;
         GameObject foreground = CreateGroup(root, "group_foreground");
         SetRect(foreground, new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.94f), Vector2.zero, Vector2.zero);
         GameObject characters = CreateImage(foreground.transform, "image_characters", PlaceholderCharacterColor, new Vector2(0.02f, 0.08f), new Vector2(0.53f, 0.92f), Vector2.zero, Vector2.zero);
         SetRaycastTarget(characters, false);
-        GameObject logo = CreateImage(foreground.transform, "image_logo", PlaceholderLogoColor, new Vector2(0.45f, 0.50f), new Vector2(0.95f, 0.90f), Vector2.zero, Vector2.zero);
+        characters.SetActive(false);
+        GameObject logo = CreateImage(foreground.transform, "image_logo", Color.white, new Vector2(0.45f, 0.50f), new Vector2(0.95f, 0.90f), Vector2.zero, Vector2.zero, Sprite(StartTitlePath));
         SetRaycastTarget(logo, false);
-        GameObject startButton = CreateButton(foreground.transform, "btn_start_game", "开始游戏", PlaceholderButtonColor, -1, -1);
+        GameObject startButton = CreateButton(foreground.transform, "btn_start_game", "Start", Color.white, -1, -1);
         SetRect(startButton, new Vector2(0.46f, 0.16f), new Vector2(0.73f, 0.34f), Vector2.zero, Vector2.zero);
+        Image startButtonImage = startButton.GetComponent<Image>();
+        startButtonImage.color = Color.white;
+        startButtonImage.sprite = Sprite(StartButtonPath);
+        startButtonImage.preserveAspect = true;
+        Transform buttonLabel = startButton.transform.Find("txt_label");
+        if (buttonLabel != null)
+        {
+            buttonLabel.gameObject.SetActive(false);
+        }
         SavePrefab(start, $"{ViewFolder}/Start.prefab");
     }
 
@@ -79,16 +93,17 @@ public static class MultiplayerPrefabBuilder
     {
         GameObject loading = CreateViewRoot("Loading");
         Transform root = loading.transform.Find("root");
-        GameObject loadingScene = CreateImage(root, "image_loading_scene", PlaceholderBackgroundColor, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        GameObject loadingScene = CreateImage(root, "image_loading_scene", Color.white, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Sprite("Assets/Arts/Loading/background.png"));
         SetRaycastTarget(loadingScene, false);
         GameObject progress = CreateGroup(root, "group_progress");
         SetRect(progress, new Vector2(0.14f, 0.20f), new Vector2(0.86f, 0.30f), new Vector2(0.5f, 0.5f), Vector2.zero);
-        GameObject track = CreateImage(progress.transform, "image_progress_track", PlaceholderProgressTrackColor, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        GameObject track = CreateImage(progress.transform, "image_progress_track", Color.white, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Sprite("Assets/Arts/Loading/progress_frame.png"));
         SetRaycastTarget(track, false);
-        GameObject fill = CreateImage(progress.transform, "image_progress_fill", PlaceholderProgressFillColor, new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, 0.5f), Vector2.zero);
+        GameObject fill = CreateImage(progress.transform, "image_progress_fill", Color.white, new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, 0.5f), Vector2.zero, Sprite("Assets/Arts/Loading/progress_fill.png"));
         SetRaycastTarget(fill, false);
-        GameObject indicator = CreateImage(progress.transform, "image_progress_indicator", PlaceholderProgressIndicatorColor, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero);
-        SetSize(indicator, 58, 58);
+        GameObject indicator = CreateImage(progress.transform, "image_progress_indicator", Color.white, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Sprite("Assets/Arts/Loading/character_runner.png"));
+        SetSize(indicator, 76, 58);
+        indicator.GetComponent<Image>().preserveAspect = true;
         SetRaycastTarget(indicator, false);
         SavePrefab(loading, $"{ViewFolder}/Loading.prefab");
     }

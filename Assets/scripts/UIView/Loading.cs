@@ -12,6 +12,8 @@ public sealed class Loading : UIScript
     private Button _quitButton;
     private TMP_Text _failureMessageText;
     private float _displayedProgress;
+    private float _elapsedSeconds;
+    private float _minimumDisplaySeconds;
 
     public override string GetPath()
     {
@@ -22,6 +24,8 @@ public sealed class Loading : UIScript
     {
         _progressFill = FindRequiredRectTransform("root/group_progress/image_progress_fill");
         _progressIndicator = FindRequiredRectTransform("root/group_progress/image_progress_indicator");
+        _elapsedSeconds = 0f;
+        _minimumDisplaySeconds = Random.Range(1.2f, 1.6f);
         _displayedProgress = 0f;
         ApplyProgress(0f);
     }
@@ -34,11 +38,21 @@ public sealed class Loading : UIScript
             return;
         }
 
-        float targetProgress = Mathf.Clamp01(controller.StartupProgress);
+        _elapsedSeconds += deltaTime;
+
+        // Keep the bar moving during fast connections while reserving the final step for success.
+        float timeProgress = Mathf.Clamp01(_elapsedSeconds / _minimumDisplaySeconds) * 0.92f;
+        float targetProgress = Mathf.Max(timeProgress, Mathf.Clamp01(controller.StartupProgress));
+        bool canFinish = controller.StartupSucceeded && _elapsedSeconds >= _minimumDisplaySeconds;
+        if (!canFinish)
+        {
+            targetProgress = Mathf.Min(targetProgress, 0.92f);
+        }
+
         _displayedProgress = Mathf.MoveTowards(
             _displayedProgress,
             Mathf.Max(_displayedProgress, targetProgress),
-            Mathf.Max(0.35f, deltaTime * 0.9f));
+            deltaTime * 1.2f);
         ApplyProgress(_displayedProgress);
 
         if (controller.StartupFailed)

@@ -131,6 +131,18 @@ public sealed class OnlineGameController
             "Failed to update character.");
     }
 
+    public void SetName(string name)
+    {
+        string normalizedName = string.IsNullOrWhiteSpace(name) ? LocalPlayerProfile.Name : name.Trim();
+        if (normalizedName.Length > 16)
+        {
+            normalizedName = normalizedName.Substring(0, 16);
+        }
+
+        LocalPlayerProfile.SetName(normalizedName);
+        LocalPlayerProfile.SaveIfDirty();
+    }
+
     public void JoinRoom(string roomId)
     {
         if (string.IsNullOrEmpty(roomId))
