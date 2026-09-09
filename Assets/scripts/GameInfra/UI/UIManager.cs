@@ -86,6 +86,16 @@ public sealed class UIManager
         IsInitialized = false;
     }
 
+    public void Tick(float deltaTime)
+    {
+        OpenedView[] openedViews = new OpenedView[_openedViewByGameObject.Count];
+        _openedViewByGameObject.Values.CopyTo(openedViews, 0);
+        foreach (OpenedView openedView in openedViews)
+        {
+            openedView.GameUIScript.OnTick(deltaTime);
+        }
+    }
+
     private Transform GetOrCreateLayer(string layerName, int siblingIndex)
     {
         Transform layerTransform = UIRootTransform.Find(layerName);

@@ -3,6 +3,8 @@ public sealed class StateManager
     private readonly StateGame _gameStateGame;
     private readonly StateLobby _gameStateLobby;
     private readonly StateRoom _gameStateRoom;
+    private readonly StateStart _gameStateStart;
+    private readonly StateLoading _gameStateLoading;
     private readonly GameState _initialGameState;
 
     public GameState CurrentState { get; private set; }
@@ -15,6 +17,10 @@ public sealed class StateManager
         _gameStateLobby = new StateLobby();
         _gameStateRoom = new StateRoom();
         _gameStateGame = new StateGame();
+        _gameStateStart = new StateStart();
+        _gameStateLoading = new StateLoading();
+        _gameStateStart.BindEventSystem(GameEventSystem);
+        _gameStateLoading.BindEventSystem(GameEventSystem);
         _gameStateLobby.BindEventSystem(GameEventSystem);
         _gameStateRoom.BindEventSystem(GameEventSystem);
         _gameStateGame.BindEventSystem(GameEventSystem);
@@ -70,6 +76,8 @@ public sealed class StateManager
 
         switch (gameLaunchConfig.InitialState)
         {
+            case "start":
+                return _gameStateStart;
             case "lobby":
                 return _gameStateLobby;
             case "game":
@@ -94,6 +102,12 @@ public sealed class StateManager
 
         switch (switchStateArg.StateName)
         {
+            case "start":
+                SetState(_gameStateStart);
+                return;
+            case "loading":
+                SetState(_gameStateLoading);
+                return;
             case "lobby":
                 SetState(_gameStateLobby);
                 return;

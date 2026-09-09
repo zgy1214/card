@@ -1,4 +1,6 @@
 using System;
+using System;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -9,12 +11,20 @@ public sealed class OnlineGameController
     private readonly GameSessionSynchronizer _gameSessionSynchronizer;
 
     private bool _helloSent;
+    private CancellationTokenSource _startupCancellationTokenSource;
+    private TaskCompletionSource<bool> _sessionHelloAckCompletionSource;
+    private Task _startupTask;
 
     public LocalPlayerProfile LocalPlayerProfile { get; } = new LocalPlayerProfile();
     public LobbyModel LobbyModel { get; } = new LobbyModel();
     public RoomModel RoomModel { get; } = new RoomModel();
     public GameSession GameSession { get; } = new GameSession();
     public bool IsConnected => _webSocketTransport.IsConnected;
+    public float StartupProgress { get; private set; }
+    public int StartupAttempt { get; private set; }
+    public bool StartupSucceeded { get; private set; }
+    public bool StartupFailed { get; private set; }
+    public string StartupFailureMessage { get; private set; }
 
     public event Action RoomEntered;
     public event Action RoomLeft;
@@ -41,7 +51,11 @@ public sealed class OnlineGameController
     {
         LocalPlayerProfile.LoadOrCreate();
         GameSession.SetLocalPlayerId(LocalPlayerProfile.PlayerId);
-        FireAndForget(EnsureSessionAsync(), "Failed to connect to the game server during initialization.");
+        StartupProgress = 0.12f;
+        StartupAttempt = 0;
+        StartupSucceeded = false;
+        StartupFailed = false;
+        StartupFailureMessage = null;
     }
 
     public void Tick(float deltaTime)
@@ -53,11 +67,42 @@ public sealed class OnlineGameController
 
     public void Shutdown()
     {
+        CancelStartupConnection();
         LocalPlayerProfile.SaveIfDirty(force: true);
         _webSocketTransport.Disconnect();
         GameSession.Shutdown();
         RoomModel.Clear();
         LobbyModel.SetSessionReady(false);
+    }
+
+    public void StartStartupConnection()
+    {
+        if (_startupTask != null && !_startupTask.IsCompleted)
+        {
+            return;
+        }
+
+        _startupCancellationTokenSource?.Cancel();
+        _startupCancellationTokenSource?.Dispose();
+        _startupCancellationTokenSource = new CancellationTokenSource();
+        StartupProgress = Mathf.Max(StartupProgress, 0.12f);
+        StartupAttempt = 0;
+        StartupSucceeded = false;
+        StartupFailed = false;
+        StartupFailureMessage = null;
+        LobbyModel.SetSessionReady(false);
+        _startupTask = RunStartupConnectionAsync(_startupCancellationTokenSource.Token);
+        FireAndForget(_startupTask, "Failed to complete startup connection.");
+    }
+
+    public void CancelStartupConnection()
+    {
+        _startupCancellationTokenSource?.Cancel();
+        _startupCancellationTokenSource?.Dispose();
+        _startupCancellationTokenSource = null;
+        _sessionHelloAckCompletionSource?.TrySetCanceled();
+        _sessionHelloAckCompletionSource = null;
+        _webSocketTransport.Disconnect();
     }
 
     public void RequestRoomList()
@@ -327,6 +372,74 @@ public sealed class OnlineGameController
         }
     }
 
+    private async Task RunStartupConnectionAsync(CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 3;
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt += 1)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StartupAttempt = attempt;
+            StartupProgress = Mathf.Max(StartupProgress, 0.18f + (attempt - 1) * 0.08f);
+
+            try
+            {
+                if (await ConnectAndWaitForSessionAsync(cancellationToken))
+                {
+                    StartupProgress = 0.92f;
+                    await Task.Delay(120, cancellationToken);
+                    StartupProgress = 1f;
+                    StartupSucceeded = true;
+                    return;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                lastException = exception;
+                Debug.LogWarning($"Startup connection attempt {attempt} failed: {exception.Message}");
+            }
+
+            _webSocketTransport.Disconnect();
+            if (attempt < maxAttempts)
+            {
+                StartupProgress = Mathf.Max(StartupProgress, 0.35f + attempt * 0.08f);
+                await Task.Delay(180, cancellationToken);
+            }
+        }
+
+        StartupFailureMessage = lastException == null
+            ? "暂时无法连接服务器，请退出游戏后重试。"
+            : "服务器连接失败，请退出游戏后重试。";
+        StartupFailed = true;
+    }
+
+    private async Task<bool> ConnectAndWaitForSessionAsync(CancellationToken cancellationToken)
+    {
+        _webSocketTransport.Disconnect();
+        _helloSent = false;
+        _sessionHelloAckCompletionSource = new TaskCompletionSource<bool>();
+        await _webSocketTransport.ConnectAsync(_gameLaunchConfig.ServerUri);
+        StartupProgress = Mathf.Max(StartupProgress, 0.55f);
+        await _webSocketTransport.SendTextAsync(
+            NetworkProtocolMessages.SerializeSessionHello(
+                LocalPlayerProfile.PlayerId,
+                LocalPlayerProfile.Name,
+                LocalPlayerProfile.CharacterId));
+        _helloSent = true;
+        StartupProgress = Mathf.Max(StartupProgress, 0.72f);
+
+        Task timeoutTask = Task.Delay(5000, cancellationToken);
+        Task completedTask = await Task.WhenAny(_sessionHelloAckCompletionSource.Task, timeoutTask);
+        return completedTask == _sessionHelloAckCompletionSource.Task
+            && _sessionHelloAckCompletionSource.Task.Result
+            && IsConnected;
+    }
+
     private void ProcessIncomingMessages()
     {
         while (_webSocketTransport.TryDequeueReceivedMessage(out string rawMessage))
@@ -394,6 +507,7 @@ public sealed class OnlineGameController
         }
 
         LobbyModel.SetSessionReady(true);
+        _sessionHelloAckCompletionSource?.TrySetResult(true);
         LocalPlayerProfile.SetCharacterId(message.payload.character_id);
         RequestRoomList();
     }

@@ -44,6 +44,7 @@ public sealed class GameApp
 
         OnlineGameController?.Tick(deltaTime);
         GameStateManager?.Tick(deltaTime);
+        GameUIManager?.Tick(deltaTime);
         GameTimerManager?.Tick(deltaTime);
     }
 

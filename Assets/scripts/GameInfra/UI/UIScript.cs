@@ -32,6 +32,10 @@ public abstract class UIScript
     {
     }
 
+    public virtual void OnTick(float deltaTime)
+    {
+    }
+
     protected Transform FindViewTransform(string path)
     {
         if (ViewTransform == null)

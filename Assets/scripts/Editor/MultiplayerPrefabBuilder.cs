@@ -30,6 +30,13 @@ public static class MultiplayerPrefabBuilder
     private static readonly Color TextColor = new Color32(238, 242, 246, 255);
     private static readonly Color MutedTextColor = new Color32(174, 184, 196, 255);
     private static readonly Color InputColor = new Color32(25, 31, 39, 255);
+    private static readonly Color PlaceholderBackgroundColor = new Color32(244, 198, 92, 255);
+    private static readonly Color PlaceholderCharacterColor = new Color32(224, 104, 82, 255);
+    private static readonly Color PlaceholderLogoColor = new Color32(239, 142, 47, 255);
+    private static readonly Color PlaceholderButtonColor = new Color32(247, 171, 45, 255);
+    private static readonly Color PlaceholderProgressTrackColor = new Color32(236, 231, 213, 255);
+    private static readonly Color PlaceholderProgressFillColor = new Color32(245, 103, 105, 255);
+    private static readonly Color PlaceholderProgressIndicatorColor = new Color32(185, 72, 50, 255);
 
     private static TMP_FontAsset _uiFontAsset;
 
@@ -39,6 +46,9 @@ public static class MultiplayerPrefabBuilder
         EnsureFolders();
         EnsureGameSpriteImportSettings();
         EnsureUIFontAsset();
+        BuildStartPrefab();
+        BuildLoadingPrefab();
+        BuildConnectionFailureDialogPrefab();
         BuildLx3GamePrefab();
         BuildCardPrefab();
         BuildGamePhasePrefabs();
@@ -47,6 +57,56 @@ public static class MultiplayerPrefabBuilder
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         Debug.Log("Multiplayer UI prefabs rebuilt.");
+    }
+
+    private static void BuildStartPrefab()
+    {
+        GameObject start = CreateViewRoot("Start");
+        Transform root = start.transform.Find("root");
+        CreateImage(root, "image_background", PlaceholderBackgroundColor, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        GameObject foreground = CreateGroup(root, "group_foreground");
+        SetRect(foreground, new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.94f), Vector2.zero, Vector2.zero);
+        GameObject characters = CreateImage(foreground.transform, "image_characters", PlaceholderCharacterColor, new Vector2(0.02f, 0.08f), new Vector2(0.53f, 0.92f), Vector2.zero, Vector2.zero);
+        SetRaycastTarget(characters, false);
+        GameObject logo = CreateImage(foreground.transform, "image_logo", PlaceholderLogoColor, new Vector2(0.45f, 0.50f), new Vector2(0.95f, 0.90f), Vector2.zero, Vector2.zero);
+        SetRaycastTarget(logo, false);
+        GameObject startButton = CreateButton(foreground.transform, "btn_start_game", "开始游戏", PlaceholderButtonColor, -1, -1);
+        SetRect(startButton, new Vector2(0.46f, 0.16f), new Vector2(0.73f, 0.34f), Vector2.zero, Vector2.zero);
+        SavePrefab(start, $"{ViewFolder}/Start.prefab");
+    }
+
+    private static void BuildLoadingPrefab()
+    {
+        GameObject loading = CreateViewRoot("Loading");
+        Transform root = loading.transform.Find("root");
+        GameObject loadingScene = CreateImage(root, "image_loading_scene", PlaceholderBackgroundColor, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        SetRaycastTarget(loadingScene, false);
+        GameObject progress = CreateGroup(root, "group_progress");
+        SetRect(progress, new Vector2(0.14f, 0.20f), new Vector2(0.86f, 0.30f), new Vector2(0.5f, 0.5f), Vector2.zero);
+        GameObject track = CreateImage(progress.transform, "image_progress_track", PlaceholderProgressTrackColor, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        SetRaycastTarget(track, false);
+        GameObject fill = CreateImage(progress.transform, "image_progress_fill", PlaceholderProgressFillColor, new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, 0.5f), Vector2.zero);
+        SetRaycastTarget(fill, false);
+        GameObject indicator = CreateImage(progress.transform, "image_progress_indicator", PlaceholderProgressIndicatorColor, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero);
+        SetSize(indicator, 58, 58);
+        SetRaycastTarget(indicator, false);
+        SavePrefab(loading, $"{ViewFolder}/Loading.prefab");
+    }
+
+    private static void BuildConnectionFailureDialogPrefab()
+    {
+        GameObject dialog = CreateGroup(null, "connection_failure_dialog");
+        SetRect(dialog, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        GameObject dim = CreateImage(dialog.transform, "image_dim", new Color(0, 0, 0, 0.62f), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        SetRaycastTarget(dim, true);
+        GameObject panel = CreatePanel(dialog.transform, "panel_dialog", new Color32(255, 244, 207, 255));
+        SetRect(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero);
+        SetSize(panel, 560, 300);
+        AddVerticalLayout(panel, 18, new RectOffset(32, 32, 28, 28), TextAnchor.MiddleCenter, false, false);
+        CreateText(panel.transform, "txt_title", "连接失败", 34, TextAlignmentOptions.Center, new Color32(119, 55, 35, 255), -1, 48);
+        CreateText(panel.transform, "txt_message", "暂时无法连接服务器，请退出游戏后重试。", 22, TextAlignmentOptions.Center, new Color32(119, 85, 60, 255), -1, 76);
+        CreateButton(panel.transform, "btn_quit_game", "退出游戏", new Color32(225, 94, 67, 255), 220, 58);
+        SavePrefab(dialog, $"{TemplateFolder}/connection_failure_dialog.prefab");
     }
 
     private static void EnsureGameSpriteImportSettings()
@@ -799,6 +859,22 @@ public static class MultiplayerPrefabBuilder
     private static Sprite Sprite(string path)
     {
         return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+    }
+
+    private static GameObject CreateGroup(Transform parent, string name)
+    {
+        GameObject group = new GameObject(name, typeof(RectTransform));
+        group.transform.SetParent(parent, false);
+        return group;
+    }
+
+    private static void SetRaycastTarget(GameObject target, bool raycastTarget)
+    {
+        Image image = target.GetComponent<Image>();
+        if (image != null)
+        {
+            image.raycastTarget = raycastTarget;
+        }
     }
 
     private static GameObject CreateImage(
