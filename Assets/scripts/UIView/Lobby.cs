@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Spine.Unity;
 
 public sealed class Lobby : UIScript
 {
@@ -9,6 +10,7 @@ public sealed class Lobby : UIScript
 
     private CharacterArtLibrary _characterArtLibrary;
     private Image _characterImage;
+    private SkeletonGraphic _characterSkeletonGraphic;
     private TMP_Text _playerNameText;
     private TMP_InputField _playerNameInput;
     private Button _editNameButton;
@@ -47,16 +49,17 @@ public sealed class Lobby : UIScript
     private void BindNodes()
     {
         _characterArtLibrary = ViewGameObject.GetComponent<CharacterArtLibrary>();
-        _characterImage = FindRequiredImage("root/group_character_stage/image_character");
+        _characterImage = FindOptionalImage("root/group_character_stage/image_character");
+        _characterSkeletonGraphic = FindOptionalSkeletonGraphic("root/group_character_stage/character");
         _playerNameText = FindRequiredText("root/group_character_stage/group_player_identity/txt_player_name");
         _playerNameInput = FindRequiredInput("root/group_character_stage/group_player_identity/input_player_name");
         _editNameButton = FindRequiredButton("root/group_character_stage/group_player_identity/btn_edit_name");
         _previousCharacterButton = FindRequiredButton("root/group_character_stage/btn_character_previous");
         _nextCharacterButton = FindRequiredButton("root/group_character_stage/btn_character_next");
-        _joinRoomButton = FindRequiredButton("root/group_main_actions/btn_join_room");
-        _createRoomButton = FindRequiredButton("root/group_main_actions/btn_create_room");
-        _matchmakingButton = FindRequiredButton("root/group_main_actions/btn_matchmaking");
-        _rulesButton = FindRequiredButton("root/group_main_actions/btn_rules");
+        _joinRoomButton = FindRequiredButton("root/btn_join_room");
+        _createRoomButton = FindRequiredButton("root/btn_create_room");
+        _matchmakingButton = FindRequiredButton("root/btn_matchmaking");
+        _rulesButton = FindRequiredButton("root/btn_rules");
         _helpButton = FindRequiredButton("root/group_top_actions/btn_help");
         _settingsButton = FindRequiredButton("root/group_top_actions/btn_settings");
 
@@ -106,8 +109,16 @@ public sealed class Lobby : UIScript
 
     private void RenderCharacter()
     {
-        _characterImage.sprite = _characterArtLibrary?.GetSprite(CharacterIds[_characterIndex]);
-        _characterImage.preserveAspect = true;
+        if (_characterImage != null)
+        {
+            _characterImage.sprite = _characterArtLibrary?.GetSprite(CharacterIds[_characterIndex]);
+            _characterImage.preserveAspect = true;
+        }
+
+        if (_characterSkeletonGraphic != null && _characterSkeletonGraphic.SkeletonDataAsset != null)
+        {
+            _characterSkeletonGraphic.Initialize(false);
+        }
     }
 
     private void RenderMatchmakingState()
@@ -243,6 +254,7 @@ public sealed class Lobby : UIScript
     {
         _characterArtLibrary = null;
         _characterImage = null;
+        _characterSkeletonGraphic = null;
         _playerNameText = null;
         _playerNameInput = null;
         _editNameButton = null;
@@ -321,14 +333,31 @@ public sealed class Lobby : UIScript
         return image;
     }
 
+    private Image FindOptionalImage(string path)
+    {
+        Transform target = FindOptionalTransform(ViewTransform, path);
+        return target == null ? null : target.GetComponent<Image>();
+    }
+
+    private SkeletonGraphic FindOptionalSkeletonGraphic(string path)
+    {
+        Transform target = FindOptionalTransform(ViewTransform, path);
+        return target == null ? null : target.GetComponent<SkeletonGraphic>();
+    }
+
     private Transform FindRequiredTransform(Transform rootTransform, string path)
     {
-        Transform target = rootTransform == null ? null : rootTransform.Find(path);
+        Transform target = FindOptionalTransform(rootTransform, path);
         if (target == null)
         {
             throw new System.InvalidOperationException($"Lobby view cannot find node: {path}");
         }
 
         return target;
+    }
+
+    private Transform FindOptionalTransform(Transform rootTransform, string path)
+    {
+        return rootTransform == null ? null : rootTransform.Find(path);
     }
 }

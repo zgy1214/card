@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Events;
 
 public sealed class Room : UIScript
 {
@@ -47,31 +48,44 @@ public sealed class Room : UIScript
     {
         _characterArtLibrary = ViewGameObject.GetComponent<CharacterArtLibrary>();
         _roomNameText = FindRequiredText("root/group_header/txt_room_name");
-        _roomIdText = FindRequiredText("root/group_header/txt_room_id");
-        _roomStatusText = FindRequiredText("root/txt_room_status");
+        _roomIdText = FindOptionalText("root/group_header/txt_room_id");
+        _roomStatusText = FindOptionalText("root/txt_room_status");
         _leaveButton = FindRequiredButton("root/group_header/btn_leave");
-        _readyButton = FindRequiredButton("root/group_bottom/group_room_actions/btn_ready");
-        _startGameButton = FindRequiredButton("root/group_bottom/group_room_actions/btn_start_game");
-        _chatFontAsset = FindRequiredText("root/group_bottom/group_chat/txt_chat_title").font;
-        _chatScrollRect = FindRequiredScrollRect("root/group_bottom/group_chat/scroll_chat");
-        _chatInput = FindRequiredInput("root/group_bottom/group_chat/group_chat_input/input_chat");
-        _sendChatButton = FindRequiredButton("root/group_bottom/group_chat/group_chat_input/btn_send_chat");
-        _chatContentTransform = FindRequiredTransform("root/group_bottom/group_chat/scroll_chat/viewport/content");
+        _readyButton = FindOptionalButton("root/group_room_actions/btn_ready");
+        _startGameButton = FindRequiredButton("root/btn_start_game");
+        _chatFontAsset = FindOptionalText("root/group_chat/txt_chat_title")?.font;
+        _chatScrollRect = FindRequiredScrollRect("root/group_chat/scroll_chat");
+        _chatInput = FindRequiredInput("root/group_chat/group_chat_input/input_chat");
+        _sendChatButton = FindRequiredButton("root/group_chat/group_chat_input/btn_send_chat");
+        _chatContentTransform = FindRequiredTransform("root/group_chat/scroll_chat/viewport/content");
 
         for (int seatIndex = 0; seatIndex < SeatCount; seatIndex += 1)
         {
-            Transform slotTransform = FindRequiredTransform($"root/group_player_seats/slot_player{seatIndex}");
+            Transform slotTransform = FindRequiredTransform($"root/slot_player{seatIndex}");
+            Image plusImage = FindRequiredImage(slotTransform, "img_plus");
+            Button plusButton = plusImage.GetComponent<Button>() ?? plusImage.gameObject.AddComponent<Button>();
+            plusButton.targetGraphic = plusImage;
+            int capturedSeatIndex = seatIndex;
+            UnityAction plusClickAction = () => OnClickAddAI(capturedSeatIndex);
+            plusButton.onClick.AddListener(plusClickAction);
+
             _seatBindings.Add(new SeatBinding(
                 seatIndex,
                 FindRequiredImage(slotTransform, "img_character"),
-                FindRequiredText(slotTransform, "txt_seat"),
+                FindOptionalText(slotTransform, "txt_seat"),
                 FindRequiredText(slotTransform, "txt_name"),
-                FindRequiredText(slotTransform, "txt_player_type"),
-                FindRequiredText(slotTransform, "txt_ready")));
+                FindOptionalText(slotTransform, "txt_player_type"),
+                FindOptionalText(slotTransform, "txt_ready"),
+                plusImage.gameObject,
+                plusButton,
+                plusClickAction));
         }
 
         _leaveButton.onClick.AddListener(OnClickLeave);
-        _readyButton.onClick.AddListener(OnClickReady);
+        if (_readyButton != null)
+        {
+            _readyButton.onClick.AddListener(OnClickReady);
+        }
         _startGameButton.onClick.AddListener(OnClickStartGame);
         _sendChatButton.onClick.AddListener(OnClickSendChat);
         _chatInput.onSubmit.AddListener(OnSubmitChat);
@@ -122,36 +136,72 @@ public sealed class Room : UIScript
         RoomPlayerSnapshot localPlayer = roomModel.GetLocalPlayer(localPlayerId);
 
         _roomNameText.text = roomModel.Name;
-        _roomIdText.text = $"房间号 {roomModel.RoomId}";
-        _roomStatusText.text = BuildRoomStatusText(roomModel, localPlayer, isLocalOwner);
+        if (_roomIdText != null)
+        {
+            _roomIdText.text = $"房间号 {roomModel.RoomId}";
+        }
+        if (_roomStatusText != null)
+        {
+            _roomStatusText.text = BuildRoomStatusText(roomModel, localPlayer, isLocalOwner);
+        }
 
-        _readyButton.gameObject.SetActive(!isLocalOwner);
-        _readyButton.interactable = roomModel.CanLocalReady(localPlayerId);
-        SetButtonLabel(_readyButton, localPlayer != null && localPlayer.IsReady ? "取消准备" : "准备");
+        if (_readyButton != null)
+        {
+            _readyButton.gameObject.SetActive(!isLocalOwner);
+            _readyButton.interactable = roomModel.CanLocalReady(localPlayerId);
+            SetButtonLabel(_readyButton, localPlayer != null && localPlayer.IsReady ? "取消准备" : "准备");
+        }
 
         _startGameButton.gameObject.SetActive(isLocalOwner);
         _startGameButton.interactable = roomModel.CanLocalStartGame(localPlayerId);
 
+        int nextEmptySeatIndex = FindNextEmptySeatIndex(roomModel);
         foreach (SeatBinding seatBinding in _seatBindings)
         {
-            RenderSeat(roomModel, seatBinding, isLocalOwner);
+            RenderSeat(roomModel, seatBinding, roomModel.CanLocalAddAI(localPlayerId), nextEmptySeatIndex);
         }
     }
 
-    private void RenderSeat(RoomModel roomModel, SeatBinding seatBinding, bool isLocalOwner)
+    private int FindNextEmptySeatIndex(RoomModel roomModel)
+    {
+        for (int seatIndex = 0; seatIndex < SeatCount; seatIndex += 1)
+        {
+            if (roomModel.GetPlayerBySeat(seatIndex) == null)
+            {
+                return seatIndex;
+            }
+        }
+
+        return -1;
+    }
+
+    private void RenderSeat(
+        RoomModel roomModel,
+        SeatBinding seatBinding,
+        bool canLocalAddAI,
+        int nextEmptySeatIndex)
     {
         RoomPlayerSnapshot player = roomModel.GetPlayerBySeat(seatBinding.SeatIndex);
-        seatBinding.SeatText.text = $"座位 {seatBinding.SeatIndex + 1}";
+        if (seatBinding.SeatText != null)
+        {
+            seatBinding.SeatText.text = $"座位 {seatBinding.SeatIndex + 1}";
+        }
         if (player == null)
         {
+            SetSeatTextVisible(seatBinding, false);
+            bool isNextEmptySeat = seatBinding.SeatIndex == nextEmptySeatIndex;
+            seatBinding.PlusObject.SetActive(isNextEmptySeat);
+            seatBinding.PlusButton.interactable = canLocalAddAI && isNextEmptySeat;
+
             seatBinding.CharacterImage.sprite = null;
-            seatBinding.CharacterImage.color = new Color32(88, 34, 30, 180);
+            seatBinding.CharacterImage.color = new Color(1f, 1f, 1f, 0f);
             ApplyCharacterPresentation(seatBinding.CharacterImage, Vector2.zero, 1f);
-            seatBinding.NameText.text = "等待玩家加入";
-            seatBinding.PlayerTypeText.text = "-";
-            seatBinding.ReadyText.text = "-";
             return;
         }
+
+        SetSeatTextVisible(seatBinding, true);
+        seatBinding.PlusObject.SetActive(false);
+        seatBinding.PlusButton.interactable = false;
 
         seatBinding.CharacterImage.sprite = _characterArtLibrary?.GetSprite(player.CharacterId);
         seatBinding.CharacterImage.preserveAspect = true;
@@ -161,8 +211,14 @@ public sealed class Room : UIScript
             _characterArtLibrary?.GetRoomOffset(player.CharacterId) ?? Vector2.zero,
             _characterArtLibrary?.GetRoomScale(player.CharacterId) ?? 1f);
         seatBinding.NameText.text = player.Name;
-        seatBinding.PlayerTypeText.text = player.IsAI ? "AI" : "玩家";
-        seatBinding.ReadyText.text = player.IsOwner ? "房主" : player.IsReady ? "已准备" : "未准备";
+        if (seatBinding.PlayerTypeText != null)
+        {
+            seatBinding.PlayerTypeText.text = player.IsAI ? "AI" : "玩家";
+        }
+        if (seatBinding.ReadyText != null)
+        {
+            seatBinding.ReadyText.text = player.IsOwner ? "房主" : player.IsReady ? "已准备" : "未准备";
+        }
     }
 
     private void ApplyCharacterPresentation(Image characterImage, Vector2 offset, float scale)
@@ -176,7 +232,7 @@ public sealed class Room : UIScript
     {
         if (!roomModel.IsFull())
         {
-            return $"等待玩家加入 {roomModel.Players.Count}/{roomModel.MaxPlayers}";
+            return string.Empty;
         }
 
         if (isLocalOwner)
@@ -185,6 +241,32 @@ public sealed class Room : UIScript
         }
 
         return localPlayer != null && localPlayer.IsReady ? "已准备，等待房主开始" : "人数已满，请准备";
+    }
+
+    private void SetSeatTextVisible(SeatBinding seatBinding, bool isVisible)
+    {
+        seatBinding.NameText.gameObject.SetActive(isVisible);
+        seatBinding.PlayerTypeText?.gameObject.SetActive(isVisible);
+        seatBinding.ReadyText?.gameObject.SetActive(isVisible);
+    }
+
+    private void OnClickAddAI(int seatIndex)
+    {
+        OnlineGameController controller = GameApp.Current?.OnlineGameController;
+        RoomModel roomModel = controller?.RoomModel;
+        if (controller == null || roomModel == null || !roomModel.HasRoom)
+        {
+            return;
+        }
+
+        string localPlayerId = controller.LocalPlayerProfile.PlayerId;
+        if (!roomModel.CanLocalAddAI(localPlayerId)
+            || FindNextEmptySeatIndex(roomModel) != seatIndex)
+        {
+            return;
+        }
+
+        controller.AddAI();
     }
 
     private void OnClickLeave()
@@ -312,6 +394,11 @@ public sealed class Room : UIScript
             _chatInput.onSubmit.RemoveListener(OnSubmitChat);
         }
 
+        foreach (SeatBinding seatBinding in _seatBindings)
+        {
+            seatBinding.PlusButton.onClick.RemoveListener(seatBinding.PlusClickAction);
+        }
+
         ClearChatLines();
     }
 
@@ -352,6 +439,28 @@ public sealed class Room : UIScript
         {
             labelText.text = label;
         }
+    }
+
+    private TMP_Text FindOptionalText(string path)
+    {
+        return FindOptionalText(ViewTransform, path);
+    }
+
+    private TMP_Text FindOptionalText(Transform rootTransform, string path)
+    {
+        Transform targetTransform = FindOptionalTransform(rootTransform, path);
+        return targetTransform == null ? null : targetTransform.GetComponent<TMP_Text>();
+    }
+
+    private Button FindOptionalButton(string path)
+    {
+        return FindOptionalButton(ViewTransform, path);
+    }
+
+    private Button FindOptionalButton(Transform rootTransform, string path)
+    {
+        Transform targetTransform = FindOptionalTransform(rootTransform, path);
+        return targetTransform == null ? null : targetTransform.GetComponent<Button>();
     }
 
     private TMP_Text FindRequiredText(string path)
@@ -431,13 +540,18 @@ public sealed class Room : UIScript
 
     private Transform FindRequiredTransform(Transform rootTransform, string path)
     {
-        Transform targetTransform = rootTransform == null ? null : rootTransform.Find(path);
+        Transform targetTransform = FindOptionalTransform(rootTransform, path);
         if (targetTransform == null)
         {
             throw new System.InvalidOperationException($"Room view cannot find node: {path}");
         }
 
         return targetTransform;
+    }
+
+    private Transform FindOptionalTransform(Transform rootTransform, string path)
+    {
+        return rootTransform == null ? null : rootTransform.Find(path);
     }
 
     private sealed class SeatBinding
@@ -448,6 +562,9 @@ public sealed class Room : UIScript
         public TMP_Text NameText { get; }
         public TMP_Text PlayerTypeText { get; }
         public TMP_Text ReadyText { get; }
+        public GameObject PlusObject { get; }
+        public Button PlusButton { get; }
+        public UnityAction PlusClickAction { get; }
 
         public SeatBinding(
             int seatIndex,
@@ -455,7 +572,10 @@ public sealed class Room : UIScript
             TMP_Text seatText,
             TMP_Text nameText,
             TMP_Text playerTypeText,
-            TMP_Text readyText)
+            TMP_Text readyText,
+            GameObject plusObject,
+            Button plusButton,
+            UnityAction plusClickAction)
         {
             SeatIndex = seatIndex;
             CharacterImage = characterImage;
@@ -463,6 +583,9 @@ public sealed class Room : UIScript
             NameText = nameText;
             PlayerTypeText = playerTypeText;
             ReadyText = readyText;
+            PlusObject = plusObject;
+            PlusButton = plusButton;
+            PlusClickAction = plusClickAction;
         }
     }
 }

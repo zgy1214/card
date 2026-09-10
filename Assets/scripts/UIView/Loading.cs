@@ -6,8 +6,7 @@ public sealed class Loading : UIScript
 {
     private const string FailureDialogPrefabPath = "prefabs/template/connection_failure_dialog";
 
-    private RectTransform _progressFill;
-    private RectTransform _progressIndicator;
+    private Slider _progressSlider;
     private GameObject _failureDialog;
     private Button _quitButton;
     private TMP_Text _failureMessageText;
@@ -22,12 +21,19 @@ public sealed class Loading : UIScript
 
     public override void OnOpen()
     {
-        _progressFill = FindRequiredRectTransform("root/group_progress/image_progress_fill");
-        _progressIndicator = FindRequiredRectTransform("root/group_progress/image_progress_indicator");
+        _progressSlider = FindRequiredTransform("root/group_progress").GetComponent<Slider>();
+        if (_progressSlider == null)
+        {
+            throw new System.InvalidOperationException("Loading view cannot find Slider on root/group_progress.");
+        }
+
+        _progressSlider.minValue = 0f;
+        _progressSlider.maxValue = 1f;
+        _progressSlider.wholeNumbers = false;
+        _progressSlider.SetValueWithoutNotify(0f);
         _elapsedSeconds = 0f;
         _minimumDisplaySeconds = Random.Range(1.2f, 1.6f);
         _displayedProgress = 0f;
-        ApplyProgress(0f);
     }
 
     public override void OnTick(float deltaTime)
@@ -53,7 +59,7 @@ public sealed class Loading : UIScript
             _displayedProgress,
             Mathf.Max(_displayedProgress, targetProgress),
             deltaTime * 1.2f);
-        ApplyProgress(_displayedProgress);
+        _progressSlider.SetValueWithoutNotify(_displayedProgress);
 
         if (controller.StartupFailed)
         {
@@ -71,28 +77,7 @@ public sealed class Loading : UIScript
         _failureDialog = null;
         _quitButton = null;
         _failureMessageText = null;
-        _progressFill = null;
-        _progressIndicator = null;
-    }
-
-    private void ApplyProgress(float progress)
-    {
-        if (_progressFill != null)
-        {
-            Vector2 anchorMax = _progressFill.anchorMax;
-            anchorMax.x = progress;
-            _progressFill.anchorMax = anchorMax;
-        }
-
-        if (_progressIndicator != null)
-        {
-            Vector2 anchorMin = _progressIndicator.anchorMin;
-            Vector2 anchorMax = _progressIndicator.anchorMax;
-            anchorMin.x = progress;
-            anchorMax.x = progress;
-            _progressIndicator.anchorMin = anchorMin;
-            _progressIndicator.anchorMax = anchorMax;
-        }
+        _progressSlider = null;
     }
 
     private void ShowFailureDialog(string message)
@@ -118,12 +103,6 @@ public sealed class Loading : UIScript
 #else
         Application.Quit();
 #endif
-    }
-
-    private RectTransform FindRequiredRectTransform(string path)
-    {
-        Transform targetTransform = FindRequiredTransform(path);
-        return targetTransform as RectTransform;
     }
 
     private Button FindRequiredButton(Transform rootTransform, string path)

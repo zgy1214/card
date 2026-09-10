@@ -1,6 +1,7 @@
 public sealed class StateLoading : GameState
 {
     private const float MinimumDisplaySeconds = 1.5f;
+    private const float CompletionDisplayBufferSeconds = 0.2f;
 
     private float _elapsedSeconds;
     private bool _hasRequestedLobby;
@@ -24,7 +25,8 @@ public sealed class StateLoading : GameState
             return;
         }
 
-        if (controller.StartupSucceeded && _elapsedSeconds >= MinimumDisplaySeconds)
+        if (controller.StartupSucceeded
+            && _elapsedSeconds >= MinimumDisplaySeconds + CompletionDisplayBufferSeconds)
         {
             _hasRequestedLobby = true;
             GameEventSystem.Trigger(
