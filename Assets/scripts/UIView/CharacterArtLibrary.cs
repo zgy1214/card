@@ -1,4 +1,5 @@
 using System;
+using Spine.Unity;
 using UnityEngine;
 
 public sealed class CharacterArtLibrary : MonoBehaviour
@@ -8,6 +9,11 @@ public sealed class CharacterArtLibrary : MonoBehaviour
     public Sprite GetSprite(string characterId)
     {
         return GetEntry(characterId)?.Sprite;
+    }
+
+    public SkeletonDataAsset GetSkeletonDataAsset(string characterId)
+    {
+        return GetEntry(characterId)?.SkeletonDataAsset;
     }
 
     public Vector2 GetRoomOffset(string characterId)
@@ -54,6 +60,7 @@ public sealed class CharacterArtEntry
 {
     [SerializeField] private string _characterId;
     [SerializeField] private Sprite _sprite;
+    [SerializeField] private SkeletonDataAsset _skeletonDataAsset;
     [SerializeField] private Vector2 _roomOffset;
     [SerializeField] private float _roomScale = 1f;
     [SerializeField] private Vector2 _gameOffset;
@@ -61,6 +68,7 @@ public sealed class CharacterArtEntry
 
     public string CharacterId => _characterId;
     public Sprite Sprite => _sprite;
+    public SkeletonDataAsset SkeletonDataAsset => _skeletonDataAsset;
     public Vector2 RoomOffset => _roomOffset;
     public float RoomScale => _roomScale > 0f ? _roomScale : 1f;
     public Vector2 GameOffset => _gameOffset;

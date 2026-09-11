@@ -3760,13 +3760,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterArtLibrary
   _entries:
-  - _characterId: character_1
+  - _characterId: mengshen
     _sprite: {fileID: 21300000, guid: 02d87be7783c6ae4985ca086518bc395, type: 3}
     _roomOffset: {x: 0, y: 0}
     _roomScale: 1
     _gameOffset: {x: 0, y: 0}
     _gameScale: 0
-  - _characterId: character_2
+  - _characterId: xiaomu
     _sprite: {fileID: 21300000, guid: 16972470d6106a74a8688a5740cd1a42, type: 3}
     _roomOffset: {x: 12, y: 0}
     _roomScale: 1

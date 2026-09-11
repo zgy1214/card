@@ -44,7 +44,7 @@ public sealed class RoomModel
                     playerPayload.seat_index,
                     playerPayload.player_id,
                     playerPayload.name,
-                    string.IsNullOrEmpty(playerPayload.character_id) ? "character_1" : playerPayload.character_id,
+                    string.IsNullOrEmpty(playerPayload.character_id) ? "mengshen" : playerPayload.character_id,
                     playerPayload.player_type,
                     playerPayload.is_owner,
                     playerPayload.is_ready));
@@ -155,7 +155,7 @@ public sealed class RoomPlayerSnapshot
         SeatIndex = seatIndex;
         PlayerId = playerId;
         Name = name;
-        CharacterId = string.IsNullOrEmpty(characterId) ? "character_1" : characterId;
+        CharacterId = string.IsNullOrEmpty(characterId) ? "mengshen" : characterId;
         PlayerType = playerType;
         IsOwner = isOwner;
         IsReady = isReady;

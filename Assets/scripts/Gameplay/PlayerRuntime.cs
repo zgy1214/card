@@ -30,7 +30,7 @@ public sealed class PlayerRuntime
         PlayerId = playerId;
         Name = playerId;
         PlayerType = "human";
-        CharacterId = "character_1";
+        CharacterId = "mengshen";
         SeatIndex = seatIndex;
         IsLocalPlayer = isLocalPlayer;
     }
@@ -51,7 +51,7 @@ public sealed class PlayerRuntime
         Name = string.IsNullOrEmpty(name) ? playerId : name;
         PlayerType = string.IsNullOrEmpty(playerType) ? "human" : playerType;
         IsLocalPlayer = isLocalPlayer;
-        CharacterId = string.IsNullOrEmpty(characterId) ? "character_1" : characterId;
+        CharacterId = string.IsNullOrEmpty(characterId) ? "mengshen" : characterId;
     }
 
     public void AddHandCard(CardDefinition gameCardDefinition)

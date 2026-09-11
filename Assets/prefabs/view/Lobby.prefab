@@ -1279,7 +1279,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.1, y: 0.02}
   m_AnchorMax: {x: 0.1, y: 0.02}
-  m_AnchoredPosition: {x: 315, y: 401}
+  m_AnchoredPosition: {x: 313, y: 366}
   m_SizeDelta: {x: 379, y: 453}
   m_Pivot: {x: 0, y: 0}
 --- !u!222 &273033153169603396
@@ -1310,32 +1310,50 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  skeletonDataAsset: {fileID: 11400000, guid: f3954820077ac0f4cae835dc50e51cf7, type: 2}
+  skeletonDataAsset: {fileID: 11400000, guid: 3bfce3043937ff64f99a424d08c9c69d, type: 2}
+  additiveMaterial: {fileID: 0}
+  multiplyMaterial: {fileID: 0}
+  screenMaterial: {fileID: 0}
+  forceAdditiveMaterial: 0
+  m_SkeletonColor: {r: 1, g: 1, b: 1, a: 1}
   initialSkinName: 
   initialFlipX: 0
   initialFlipY: 0
-  startingAnimation: nvhaizi
+  startingAnimation: action1
   startingLoop: 1
   timeScale: 1
   freeze: 0
+  layoutScaleMode: 0
+  referenceSize: {x: 379, y: 453}
+  pivotOffset: {x: 0, y: 0}
+  referenceScale: 1
+  layoutScale: 1
+  rectTransformSize: {x: 379, y: 453}
+  editReferenceRect: 0
   updateWhenInvisible: 3
-  unscaledTime: 0
-  allowMultipleCanvasRenderers: 0
+  allowMultipleCanvasRenderers: 1
   canvasRenderers: []
   separatorSlotNames: []
   enableSeparatorSlots: 0
   separatorParts: []
   updateSeparatorPartLocation: 1
+  updateSeparatorPartScale: 0
+  disableMeshAssignmentOnOverride: 1
+  physicsPositionInheritanceFactor: {x: 1, y: 1}
+  physicsRotationInheritanceFactor: 1
+  physicsMovementRelativeTo: {fileID: 0}
   meshGenerator:
     settings:
       useClipping: 1
       zSpacing: 0
-      pmaVertexColors: 1
       tintBlack: 0
-      canvasGroupTintBlack: 0
-      calculateTangents: 0
+      canvasGroupCompatible: 0
+      pmaVertexColors: 1
       addNormals: 0
+      calculateTangents: 0
       immutableTriangles: 0
+  updateTiming: 1
+  unscaledTime: 0
 --- !u!1 &3961388071543198052
 GameObject:
   m_ObjectHideFlags: 0
@@ -2588,18 +2606,34 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterArtLibrary
   _entries:
-  - _characterId: character_1
+  - _characterId: mengshen
     _sprite: {fileID: 21300000, guid: 02d87be7783c6ae4985ca086518bc395, type: 3}
+    _skeletonDataAsset: {fileID: 11400000, guid: 3bfce3043937ff64f99a424d08c9c69d, type: 2}
     _roomOffset: {x: 0, y: 0}
     _roomScale: 1
     _gameOffset: {x: 0, y: 0}
     _gameScale: 0
-  - _characterId: character_2
+  - _characterId: xiaomu
     _sprite: {fileID: 21300000, guid: 16972470d6106a74a8688a5740cd1a42, type: 3}
+    _skeletonDataAsset: {fileID: 11400000, guid: c6e91e4a1d9fec348b883cdad5445757, type: 2}
     _roomOffset: {x: 12, y: 0}
     _roomScale: 1
     _gameOffset: {x: 0, y: 0}
     _gameScale: 0
+  - _characterId: ayi
+    _sprite: {fileID: 0}
+    _skeletonDataAsset: {fileID: 11400000, guid: 2737b84e7eaacc44b8cce72c5b51bcc0, type: 2}
+    _roomOffset: {x: 0, y: 0}
+    _roomScale: 1
+    _gameOffset: {x: 0, y: 0}
+    _gameScale: 1
+  - _characterId: naibao
+    _sprite: {fileID: 0}
+    _skeletonDataAsset: {fileID: 11400000, guid: f66c2fbb8ac5a414eb5efa22f0ada1cd, type: 2}
+    _roomOffset: {x: 0, y: 0}
+    _roomScale: 1
+    _gameOffset: {x: 0, y: 0}
+    _gameScale: 1
 --- !u!1 &7519412393566444575
 GameObject:
   m_ObjectHideFlags: 0

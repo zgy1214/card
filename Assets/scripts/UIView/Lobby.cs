@@ -6,7 +6,7 @@ using Spine.Unity;
 public sealed class Lobby : UIScript
 {
     private const string BlockingOverlayPrefabPath = "prefabs/template/blocking_overlay";
-    private static readonly string[] CharacterIds = { "character_1", "character_2" };
+    private static readonly string[] CharacterIds = { "mengshen", "xiaomu", "ayi", "naibao" };
 
     private CharacterArtLibrary _characterArtLibrary;
     private Image _characterImage;
@@ -109,15 +109,29 @@ public sealed class Lobby : UIScript
 
     private void RenderCharacter()
     {
+        string characterId = CharacterIds[_characterIndex];
+
         if (_characterImage != null)
         {
-            _characterImage.sprite = _characterArtLibrary?.GetSprite(CharacterIds[_characterIndex]);
+            _characterImage.sprite = _characterArtLibrary?.GetSprite(characterId);
             _characterImage.preserveAspect = true;
         }
 
-        if (_characterSkeletonGraphic != null && _characterSkeletonGraphic.SkeletonDataAsset != null)
+        if (_characterSkeletonGraphic != null && _characterArtLibrary != null)
         {
-            _characterSkeletonGraphic.Initialize(false);
+            SkeletonDataAsset skeletonDataAsset = _characterArtLibrary.GetSkeletonDataAsset(characterId);
+            if (skeletonDataAsset == null)
+            {
+                _characterSkeletonGraphic.Clear();
+                return;
+            }
+
+            _characterSkeletonGraphic.skeletonDataAsset = skeletonDataAsset;
+            _characterSkeletonGraphic.Initialize(true);
+            if (_characterSkeletonGraphic.IsValid)
+            {
+                _characterSkeletonGraphic.AnimationState.SetAnimation(0, "action1", true);
+            }
         }
     }
 

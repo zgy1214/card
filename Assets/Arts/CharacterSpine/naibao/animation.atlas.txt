@@ -1,0 +1,181 @@
+images/0001-naibao_idle_0013.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0001-naibao_idle_0013.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0002-naibao_idle_0014.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0002-naibao_idle_0014.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0003-naibao_idle_0001.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0003-naibao_idle_0001.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0004-naibao_idle_0002.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0004-naibao_idle_0002.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0005-naibao_idle_0003.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0005-naibao_idle_0003.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0006-naibao_idle_0004.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0006-naibao_idle_0004.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0007-naibao_idle_0005.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0007-naibao_idle_0005.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0008-naibao_idle_0006.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0008-naibao_idle_0006.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0009-naibao_idle_0007.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0009-naibao_idle_0007.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0010-naibao_idle_0008.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0010-naibao_idle_0008.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0011-naibao_idle_0009.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0011-naibao_idle_0009.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0012-naibao_idle_0010.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0012-naibao_idle_0010.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0013-naibao_idle_0011.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0013-naibao_idle_0011.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1
+
+images/0014-naibao_idle_0012.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+0014-naibao_idle_0012.png
+  rotate: false
+  xy: 0, 0
+  size: 512, 512
+  orig: 512, 512
+  offset: 0, 0
+  index: -1

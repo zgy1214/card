@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6b194f808b1af6499c93410e504af42, type: 3}
+  m_Name: animation_Atlas
+  m_EditorClassIdentifier: spine-unity::Spine.Unity.SpineAtlasAsset
+  textureLoadingMode: 0
+  onDemandTextureLoader: {fileID: 0}
+  atlasFile: {fileID: 4900000, guid: 9a9d6338052af1b4c8efa6ad2dfb3baf, type: 3}
+  materials:
+  - {fileID: 2100000, guid: 08758bf41e581cf41b57b3dcc41c3276, type: 2}
+  - {fileID: 2100000, guid: 5cf8a901ae31fda4a9123757d8a67284, type: 2}
+  - {fileID: 2100000, guid: 937733aef80b85f4ebc3ded3dd5d34b4, type: 2}
+  - {fileID: 2100000, guid: bc724c9fc7f9db146b1f73d0bbe25d05, type: 2}
+  - {fileID: 2100000, guid: 6a450e41da6b6954d899ca4cec7c3f8d, type: 2}
+  - {fileID: 2100000, guid: c84761baf07b11b46a5834df92a02efc, type: 2}
+  - {fileID: 2100000, guid: 404fe85a82ebf3242852bc7f1c1afa8b, type: 2}
+  - {fileID: 2100000, guid: 79e1f9c2d3778e147b0bad8ef669af46, type: 2}
+  - {fileID: 2100000, guid: 603df53dba19b48418db539200b61ebd, type: 2}
+  - {fileID: 2100000, guid: 85b9c31c8e6ee0d40b9e85ae10c77dca, type: 2}
+  - {fileID: 2100000, guid: 3836c24d7022af34eb441ee66c3bcb80, type: 2}
+  - {fileID: 2100000, guid: bae7427fe1b59dd47a71c627d5907923, type: 2}
+  - {fileID: 2100000, guid: 3e3bc51275dff7a479589aed8366eec7, type: 2}
+  - {fileID: 2100000, guid: 1c3fbdc396bdf934280c9e180579aa44, type: 2}
+  - {fileID: 2100000, guid: 7f4ca1b38643fdb47b1417154fd202c0, type: 2}
+  - {fileID: 2100000, guid: 6396ecf473a539641b8e1faeaa1a291e, type: 2}
+  - {fileID: 2100000, guid: a02c314d9982c874584a1dbf5cf257b5, type: 2}
+  - {fileID: 2100000, guid: fa0b134818de06147a12ce62432eeb5e, type: 2}
+  - {fileID: 2100000, guid: 932dace4ffdf0db4d8b5b75220ba2c46, type: 2}
+  - {fileID: 2100000, guid: 4b3ce8f3621912846b16c7435886ab0a, type: 2}
+  - {fileID: 2100000, guid: d7136dff56df8df44b2efe4941466ff3, type: 2}
+  - {fileID: 2100000, guid: 9761c5312e9fee8409d0052a4a41fa39, type: 2}
+  - {fileID: 2100000, guid: 3bf209fcc5a4dee459051c520a803c6d, type: 2}
+  - {fileID: 2100000, guid: f930f89341fb762469c9ccf774e70eaa, type: 2}
+  - {fileID: 2100000, guid: c9667e45b6f690943b787f36df2678f4, type: 2}
+  - {fileID: 2100000, guid: ba62643dfe110d84db8255ec2cef6ca6, type: 2}
+  - {fileID: 2100000, guid: 39b4a8d999c7fe940820e7e1f248f07f, type: 2}

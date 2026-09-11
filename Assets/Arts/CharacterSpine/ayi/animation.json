@@ -1,0 +1,312 @@
+{
+  "skeleton": {
+    "hash": "",
+    "spine": "4.2.0",
+    "x": 0,
+    "y": 0,
+    "width": 512,
+    "height": 512,
+    "images": "images/"
+  },
+  "bones": [
+    {
+      "name": "root"
+    }
+  ],
+  "slots": [
+    {
+      "name": "slot",
+      "bone": "root",
+      "attachment": "frame-0001"
+    }
+  ],
+  "skins": [
+    {
+      "name": "default",
+      "attachments": {
+        "slot": {
+          "frame-0001": {
+            "type": "region",
+            "path": "0001-dayi_idle_0002.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0002": {
+            "type": "region",
+            "path": "0002-dayi_idle_0003.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0003": {
+            "type": "region",
+            "path": "0003-dayi_idle_0004.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0004": {
+            "type": "region",
+            "path": "0004-dayi_idle_0005.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0005": {
+            "type": "region",
+            "path": "0005-dayi_idle_0006.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0006": {
+            "type": "region",
+            "path": "0006-dayi_idle_0007.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0007": {
+            "type": "region",
+            "path": "0007-dayi_idle_0008.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0008": {
+            "type": "region",
+            "path": "0008-dayi_idle_0009.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0009": {
+            "type": "region",
+            "path": "0009-dayi_idle_0010.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0010": {
+            "type": "region",
+            "path": "0010-dayi_idle_0011.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0011": {
+            "type": "region",
+            "path": "0011-dayi_idle_0012.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0012": {
+            "type": "region",
+            "path": "0012-dayi_idle_0013.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0013": {
+            "type": "region",
+            "path": "0013-dayi_idle_0014.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0014": {
+            "type": "region",
+            "path": "0014-dayi_idle_0015.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0015": {
+            "type": "region",
+            "path": "0015-dayi_idle_0016.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0016": {
+            "type": "region",
+            "path": "0016-dayi_idle_0017.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0017": {
+            "type": "region",
+            "path": "0017-dayi_idle_0018.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0018": {
+            "type": "region",
+            "path": "0018-dayi_idle_0019.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0019": {
+            "type": "region",
+            "path": "0019-dayi_idle_0020.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0020": {
+            "type": "region",
+            "path": "0020-dayi_idle_0021.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0021": {
+            "type": "region",
+            "path": "0021-dayi_idle_0022.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0022": {
+            "type": "region",
+            "path": "0022-dayi_idle_0023.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0023": {
+            "type": "region",
+            "path": "0023-dayi_idle_0024.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0024": {
+            "type": "region",
+            "path": "0024-dayi_idle_0025.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0025": {
+            "type": "region",
+            "path": "0025-dayi_idle_0026.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0026": {
+            "type": "region",
+            "path": "0026-dayi_idle_0027.png",
+            "width": 512,
+            "height": 512
+          },
+          "frame-0027": {
+            "type": "region",
+            "path": "0027-dayi_idle_0001.png",
+            "width": 512,
+            "height": 512
+          }
+        }
+      }
+    }
+  ],
+  "animations": {
+    "action1": {
+      "slots": {
+        "slot": {
+          "attachment": [
+            {
+              "time": 0,
+              "name": "frame-0001"
+            },
+            {
+              "time": 0.0625,
+              "name": "frame-0002"
+            },
+            {
+              "time": 0.125,
+              "name": "frame-0003"
+            },
+            {
+              "time": 0.1875,
+              "name": "frame-0004"
+            },
+            {
+              "time": 0.25,
+              "name": "frame-0005"
+            },
+            {
+              "time": 0.3125,
+              "name": "frame-0006"
+            },
+            {
+              "time": 0.375,
+              "name": "frame-0007"
+            },
+            {
+              "time": 0.4375,
+              "name": "frame-0008"
+            },
+            {
+              "time": 0.5,
+              "name": "frame-0009"
+            },
+            {
+              "time": 0.5625,
+              "name": "frame-0010"
+            },
+            {
+              "time": 0.625,
+              "name": "frame-0011"
+            },
+            {
+              "time": 0.6875,
+              "name": "frame-0012"
+            },
+            {
+              "time": 0.75,
+              "name": "frame-0013"
+            },
+            {
+              "time": 0.8125,
+              "name": "frame-0014"
+            },
+            {
+              "time": 0.875,
+              "name": "frame-0015"
+            },
+            {
+              "time": 0.9375,
+              "name": "frame-0016"
+            },
+            {
+              "time": 1,
+              "name": "frame-0017"
+            },
+            {
+              "time": 1.0625,
+              "name": "frame-0018"
+            },
+            {
+              "time": 1.125,
+              "name": "frame-0019"
+            },
+            {
+              "time": 1.1875,
+              "name": "frame-0020"
+            },
+            {
+              "time": 1.25,
+              "name": "frame-0021"
+            },
+            {
+              "time": 1.3125,
+              "name": "frame-0022"
+            },
+            {
+              "time": 1.375,
+              "name": "frame-0023"
+            },
+            {
+              "time": 1.4375,
+              "name": "frame-0024"
+            },
+            {
+              "time": 1.5,
+              "name": "frame-0025"
+            },
+            {
+              "time": 1.5625,
+              "name": "frame-0026"
+            },
+            {
+              "time": 1.625,
+              "name": "frame-0027"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -4928,13 +4928,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterArtLibrary
   _entries:
-  - _characterId: character_1
+  - _characterId: mengshen
     _sprite: {fileID: 21300000, guid: 26786780b740164468775fd10669d7d5, type: 3}
     _roomOffset: {x: 0, y: -10}
     _roomScale: 1.14
     _gameOffset: {x: 12, y: -4}
     _gameScale: 1.05
-  - _characterId: character_2
+  - _characterId: xiaomu
     _sprite: {fileID: 21300000, guid: b04262d4f843ca447a99d8a5615073dc, type: 3}
     _roomOffset: {x: -6, y: -14}
     _roomScale: 1.18

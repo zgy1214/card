@@ -127,11 +127,13 @@ public sealed class LocalPlayerProfile
     {
         switch (characterId)
         {
-            case "character_1":
-            case "character_2":
+            case "mengshen":
+            case "xiaomu":
+            case "ayi":
+            case "naibao":
                 return characterId;
             default:
-                return "character_1";
+                return "mengshen";
         }
     }
 
