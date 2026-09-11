@@ -11,7 +11,6 @@ public sealed class Lobby : UIScript
     private CharacterArtLibrary _characterArtLibrary;
     private Image _characterImage;
     private SkeletonGraphic _characterSkeletonGraphic;
-    private TMP_Text _playerNameText;
     private TMP_InputField _playerNameInput;
     private Button _editNameButton;
     private Button _previousCharacterButton;
@@ -51,8 +50,7 @@ public sealed class Lobby : UIScript
         _characterArtLibrary = ViewGameObject.GetComponent<CharacterArtLibrary>();
         _characterImage = FindOptionalImage("root/group_character_stage/image_character");
         _characterSkeletonGraphic = FindOptionalSkeletonGraphic("root/group_character_stage/character");
-        _playerNameText = FindRequiredText("root/group_character_stage/group_player_identity/txt_player_name");
-        _playerNameInput = FindRequiredInput("root/group_character_stage/group_player_identity/input_player_name");
+        _playerNameInput = FindRequiredInput("root/group_character_stage/group_player_identity/txt_player_name");
         _editNameButton = FindRequiredButton("root/group_character_stage/group_player_identity/btn_edit_name");
         _previousCharacterButton = FindRequiredButton("root/group_character_stage/btn_character_previous");
         _nextCharacterButton = FindRequiredButton("root/group_character_stage/btn_character_next");
@@ -101,8 +99,8 @@ public sealed class Lobby : UIScript
             return;
         }
 
-        _playerNameText.text = profile.Name;
         _playerNameInput.text = profile.Name;
+        _playerNameInput.gameObject.SetActive(true);
         _characterIndex = GetCharacterIndex(profile.CharacterId);
         RenderCharacter();
     }
@@ -157,29 +155,50 @@ public sealed class Lobby : UIScript
 
     private void OnClickEditName()
     {
-        _playerNameInput.text = _playerNameText.text;
-        _playerNameText.gameObject.SetActive(false);
-        _editNameButton.gameObject.SetActive(false);
-        _playerNameInput.gameObject.SetActive(true);
         _playerNameInput.Select();
         _playerNameInput.ActivateInputField();
     }
 
     private void OnNameEditEnded(string value)
     {
-        string normalizedName = string.IsNullOrWhiteSpace(value) ? _playerNameText.text : value.Trim();
-        if (normalizedName.Length > 16)
-        {
-            normalizedName = normalizedName.Substring(0, 16);
-        }
+        CommitNameEdit();
+    }
+
+    private void CommitNameEdit()
+    {
+        string fallbackName = GameApp.Current?.OnlineGameController?.LocalPlayerProfile?.Name
+            ?? _playerNameInput.text;
+        string normalizedName = NormalizePlayerName(_playerNameInput.text, fallbackName);
 
         GameApp.Current?.OnlineGameController?.SetName(normalizedName);
 
-        _playerNameText.text = normalizedName;
         _playerNameInput.text = normalizedName;
-        _playerNameInput.gameObject.SetActive(false);
-        _playerNameText.gameObject.SetActive(true);
-        _editNameButton.gameObject.SetActive(true);
+    }
+
+    private string NormalizePlayerName(string rawName, string fallbackName)
+    {
+        string trimmedName = string.IsNullOrWhiteSpace(rawName) ? string.Empty : rawName.Trim();
+        if (string.IsNullOrEmpty(trimmedName))
+        {
+            return fallbackName;
+        }
+
+        System.Text.StringBuilder builder = new System.Text.StringBuilder(trimmedName.Length);
+        foreach (char character in trimmedName)
+        {
+            if (char.IsControl(character))
+            {
+                continue;
+            }
+
+            builder.Append(character);
+            if (builder.Length >= 16)
+            {
+                break;
+            }
+        }
+
+        return builder.Length == 0 ? fallbackName : builder.ToString();
     }
 
     private void OnClickPreviousCharacter()
@@ -269,7 +288,6 @@ public sealed class Lobby : UIScript
         _characterArtLibrary = null;
         _characterImage = null;
         _characterSkeletonGraphic = null;
-        _playerNameText = null;
         _playerNameInput = null;
         _editNameButton = null;
         _previousCharacterButton = null;

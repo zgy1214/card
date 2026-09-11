@@ -54,9 +54,9 @@ class ClientConnection:
     async def _handle_session_hello(self, payload: dict[str, Any]) -> None:
         player_id = self._require_string(payload, "player_id")
         name = self._require_string(payload, "name")
-        character_id = payload.get("character_id", "character_1")
+        character_id = payload.get("character_id", "mengshen")
         if not isinstance(character_id, str):
-            character_id = "character_1"
+            character_id = "mengshen"
 
         await self._server_context.register_player(self, player_id, name, character_id)
 

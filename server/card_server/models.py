@@ -33,7 +33,7 @@ class PlayerState:
     player_id: str
     name: str
     player_type: str
-    character_id: str = "character_1"
+    character_id: str = "mengshen"
     hand_cards: list[Card] = field(default_factory=list)
 
     @property
@@ -68,7 +68,7 @@ class PlayerState:
 class PlayerRecord:
     player_id: str
     name: str
-    character_id: str = "character_1"
+    character_id: str = "mengshen"
     status: str = PLAYER_STATUS_IDLE
     room_id: str | None = None
     match_id: str | None = None

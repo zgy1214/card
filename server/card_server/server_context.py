@@ -17,6 +17,8 @@ from .models import (
     ROOM_STATUS_WAITING,
 )
 
+CHARACTER_IDS = ("mengshen", "xiaomu", "ayi", "naibao")
+
 
 class ServerContext:
     required_matchmaking_players = 4
@@ -180,7 +182,7 @@ class ServerContext:
                     seat_index=seat_index,
                     player_id=f"ai_{self._ai_counter:03d}",
                     name=f"AI {seat_index + 1}",
-                    character_id="character_2" if seat_index % 2 else "character_1",
+                    character_id=self._rng.choice(CHARACTER_IDS),
                     player_type=PLAYER_TYPE_AI,
                     is_ready=True,
                 )
@@ -627,7 +629,7 @@ class ServerContext:
         raise GameRuleError("invalid_operation", "Cannot allocate a room id.")
 
     def _normalize_character_id(self, character_id: str) -> str:
-        if character_id in {"character_1", "character_2"}:
+        if character_id in CHARACTER_IDS:
             return character_id
 
-        return "character_1"
+        return "mengshen"

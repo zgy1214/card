@@ -126,9 +126,7 @@ public sealed class OnlineGameController
     public void SetCharacter(string characterId)
     {
         LocalPlayerProfile.SetCharacterId(characterId);
-        FireAndForget(
-            SendTextAsync(NetworkProtocolMessages.SerializeProfileSetCharacterRequest(LocalPlayerProfile.CharacterId)),
-            "Failed to update character.");
+        LocalPlayerProfile.SaveIfDirty();
     }
 
     public void SetName(string name)

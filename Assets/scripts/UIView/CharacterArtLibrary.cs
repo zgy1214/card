@@ -5,6 +5,9 @@ using UnityEngine;
 public sealed class CharacterArtLibrary : MonoBehaviour
 {
     [SerializeField] private CharacterArtEntry[] _entries;
+    [SerializeField] private Sprite _roomActionStartSprite;
+    [SerializeField] private Sprite _roomActionReadySprite;
+    [SerializeField] private Sprite _roomActionUnreadySprite;
 
     public Sprite GetSprite(string characterId)
     {
@@ -36,6 +39,10 @@ public sealed class CharacterArtLibrary : MonoBehaviour
         return GetEntry(characterId)?.GameScale ?? 1f;
     }
 
+    public Sprite RoomActionStartSprite => _roomActionStartSprite;
+    public Sprite RoomActionReadySprite => _roomActionReadySprite;
+    public Sprite RoomActionUnreadySprite => _roomActionUnreadySprite;
+
     private CharacterArtEntry GetEntry(string characterId)
     {
         if (_entries == null || _entries.Length == 0)
@@ -51,7 +58,7 @@ public sealed class CharacterArtLibrary : MonoBehaviour
             }
         }
 
-        return _entries[0];
+        return null;
     }
 }
 
