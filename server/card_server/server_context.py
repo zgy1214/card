@@ -269,16 +269,6 @@ class ServerContext:
             session.submit_challenge(match_id, player_id, target_seat_index)
             await self._after_game_action_locked(session, previous_phase)
 
-    async def submit_fortune_draw(self, player_id: str, match_id: str, draw_count: int) -> None:
-        async with self._lock:
-            player = self._require_player(player_id)
-            if player.match_id != match_id:
-                raise GameRuleError("game_not_found", "Player is not in this match.")
-
-            session = self._require_match(match_id)
-            previous_phase = session.phase
-            session.submit_fortune_draw(match_id, player_id, draw_count)
-            await self._after_game_action_locked(session, previous_phase)
 
     async def leave_game(self, player_id: str, match_id: str) -> None:
         async with self._lock:

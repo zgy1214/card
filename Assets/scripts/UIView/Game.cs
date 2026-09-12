@@ -4,22 +4,23 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public sealed class Game : UIScript
+public sealed partial class Game : UIScript
 {
     private const string CardPrefabPath = "prefabs/template/card";
 
     private readonly TMP_Text[] _playerNameTexts = new TMP_Text[4];
-    private readonly TMP_Text[] _playerStatusTexts = new TMP_Text[4];
     private readonly Image[] _playerCharacterImages = new Image[4];
     private readonly List<string> _selectedCardIds = new List<string>();
 
     private Transform _handAreaTransform;
+    private HorizontalLayoutGroup _handLayout;
+    private float _lastHandLayoutWidth = -1f;
     private Transform _previewAreaTransform;
+    private HorizontalLayoutGroup _previewLayout;
+    private float _lastPreviewLayoutWidth = -1f;
     private Transform _challengeTargetsTransform;
     private TMP_Text _timerText;
-    private TMP_Text _chatPreviewText;
-    private TMP_InputField _chatInput;
-    private Button _chatSendButton;
+    private ChatPanel _chatPanel;
     private Button _catchButton;
     private Button _letgoButton;
     private Button _confirmButton;
@@ -28,7 +29,6 @@ public sealed class Game : UIScript
     private GameSession _gameSession;
     private string _faceUpCardId;
     private string _lastPhase;
-    private readonly List<string> _gameChatMessages = new List<string>();
 
     public override string GetPath()
     {
@@ -47,8 +47,11 @@ public sealed class Game : UIScript
         _characterArtLibrary = ViewGameObject.GetComponent<CharacterArtLibrary>();
         _cardArtLibrary = ViewGameObject.GetComponent<CardArtLibrary>();
         BindNodes();
+        BindChallengeNodes();
+        BindShowdownNodes();
         SubscribeGameEvents();
         SubscribeControllerEvents();
+        ResetLocalPhaseStateIfNeeded();
         RenderAll();
     }
 
@@ -56,13 +59,18 @@ public sealed class Game : UIScript
     {
         UnsubscribeGameEvents();
         UnsubscribeControllerEvents();
-        UnbindButton(_chatSendButton, OnClickSendChatButton);
-        _chatSendButton = null;
-        _chatInput = null;
+        CloseChallenge();
+        CloseShowdown();
+        _chatPanel?.Close();
+        _chatPanel = null;
         _characterArtLibrary = null;
         _cardArtLibrary = null;
         _handAreaTransform = null;
+        _handLayout = null;
+        _lastHandLayoutWidth = -1f;
         _previewAreaTransform = null;
+        _previewLayout = null;
+        _lastPreviewLayoutWidth = -1f;
         _challengeTargetsTransform = null;
         _timerText = null;
         _catchButton = null;
@@ -70,7 +78,6 @@ public sealed class Game : UIScript
         _confirmButton = null;
         _gameSession = null;
         _selectedCardIds.Clear();
-        _gameChatMessages.Clear();
         _faceUpCardId = null;
         _lastPhase = null;
     }
@@ -78,30 +85,27 @@ public sealed class Game : UIScript
     private void BindNodes()
     {
         _handAreaTransform = FindRequiredTransform("root/panel_local_hand/card_player0");
+        _handLayout = _handAreaTransform.GetComponent<HorizontalLayoutGroup>();
         _previewAreaTransform = FindRequiredTransform("root/table/preview_cards");
+        _previewLayout = _previewAreaTransform.GetComponent<HorizontalLayoutGroup>();
         _challengeTargetsTransform = FindRequiredTransform("root/panel_challenge_targets");
         _timerText = FindRequiredText("root/table/timer/txt_timer");
         _catchButton = FindRequiredButton("root/action_panel1/btn_catch");
         _letgoButton = FindRequiredButton("root/action_panel1/btn_letgo");
         _confirmButton = FindRequiredButton("root/action_panel2/btn_confirm");
-        _chatPreviewText = FindRequiredText("root/panel_chat/txt_chat_preview");
-        _chatInput = FindRequiredTransform("root/panel_chat/panel_chat_input/input_chat").GetComponent<TMP_InputField>();
-        _chatSendButton = FindRequiredButton("root/panel_chat/panel_chat_input/btn_send_chat");
+        _chatPanel = FindRequiredTransform("root/group_chat").GetComponent<ChatPanel>();
+        _chatPanel.Initialize(message => GameApp.Current?.OnlineGameController?.SendGameChat(message));
         BindSeatTexts(0, "root/seat_local");
         BindSeatTexts(1, "root/seat_left");
         BindSeatTexts(2, "root/seat_top");
         BindSeatTexts(3, "root/seat_right");
 
-        _chatSendButton.onClick.AddListener(OnClickSendChatButton);
     }
 
     private void BindSeatTexts(int displayIndex, string rootPath)
     {
         _playerCharacterImages[displayIndex] = FindRequiredTransform($"{rootPath}/panel_portrait/img_character").GetComponent<Image>();
         _playerNameTexts[displayIndex] = FindRequiredText($"{rootPath}/txt_name");
-        _playerStatusTexts[displayIndex] = displayIndex == 0
-            ? null
-            : FindRequiredText($"{rootPath}/txt_status");
     }
 
     private void SubscribeGameEvents()
@@ -134,6 +138,7 @@ public sealed class Game : UIScript
         if (controller != null)
         {
             controller.GameChatReceived += OnGameChatReceived;
+            controller.ErrorOccurred += OnChallengeError;
         }
     }
 
@@ -143,6 +148,7 @@ public sealed class Game : UIScript
         if (controller != null)
         {
             controller.GameChatReceived -= OnGameChatReceived;
+            controller.ErrorOccurred -= OnChallengeError;
         }
     }
 
@@ -154,13 +160,7 @@ public sealed class Game : UIScript
         }
 
         string senderName = string.IsNullOrEmpty(payload.name) ? "玩家" : payload.name;
-        _gameChatMessages.Add($"{senderName}: {payload.message}");
-        while (_gameChatMessages.Count > 5)
-        {
-            _gameChatMessages.RemoveAt(0);
-        }
-
-        RenderChatPreview();
+        _chatPanel.AddMessage(senderName, payload.message);
     }
 
     private void OnGameStateChanged()
@@ -179,17 +179,14 @@ public sealed class Game : UIScript
         }
 
         _lastPhase = phase;
-        if (phase == "play_select")
-        {
-            _selectedCardIds.Clear();
-            _faceUpCardId = null;
-        }
-
+        _selectedCardIds.Clear();
+        _faceUpCardId = null;
     }
 
     private void OnTurnTicked()
     {
         RenderTimer();
+        if (_gameSession?.Phase == "challenge_select") RenderChallengeControls();
     }
 
     private void RenderAll()
@@ -197,7 +194,8 @@ public sealed class Game : UIScript
         RenderPhasePanel();
         RenderPlayerSeats();
         RenderHandCards();
-        RenderChatPreview();
+        RenderChallenge();
+        RenderShowdown(true);
     }
 
     private void RenderTimer()
@@ -229,11 +227,6 @@ public sealed class Game : UIScript
             if (_playerNameTexts[displayIndex] != null)
             {
                 _playerNameTexts[displayIndex].text = BuildPlayerName(playerRuntime, fallbackName);
-            }
-
-            if (_playerStatusTexts[displayIndex] != null)
-            {
-                _playerStatusTexts[displayIndex].text = BuildPlayerStatus(playerRuntime);
             }
 
             RenderSeatCharacter(displayIndex, playerRuntime);
@@ -290,6 +283,14 @@ public sealed class Game : UIScript
         }
 
         rectTransform.anchoredPosition = offset;
+        if (characterImage.sprite != null)
+        {
+            characterImage.SetNativeSize();
+            RectTransform frame = (RectTransform)rectTransform.parent;
+            float fit = Mathf.Min(frame.rect.width / rectTransform.sizeDelta.x,
+                frame.rect.height / rectTransform.sizeDelta.y);
+            scale *= fit;
+        }
         rectTransform.localScale = new Vector3(scale, scale, 1f);
     }
 
@@ -315,34 +316,6 @@ public sealed class Game : UIScript
         }
 
         return string.IsNullOrEmpty(playerRuntime?.Name) ? fallbackName : playerRuntime.Name;
-    }
-
-    private string BuildPlayerStatus(PlayerRuntime playerRuntime)
-    {
-        if (playerRuntime == null)
-        {
-            return "等待同步";
-        }
-
-        NetworkGameStatePlayerPayload statePlayer = FindStatePlayer(playerRuntime.SeatIndex);
-        if (statePlayer != null)
-        {
-            switch (_gameSession?.Phase)
-            {
-                case "play_select":
-                    return statePlayer.play_submitted ? "已出牌" : "选择中";
-                case "challenge_select":
-                    return statePlayer.challenge_submitted ? "已确认" : "选择中";
-                case "fortune_draw":
-                    return statePlayer.fortune_draw_submitted ? "已抽取" : "抽取中";
-                case "showdown":
-                    return "公示中";
-                case "final_result":
-                    return "已结算";
-            }
-        }
-
-        return playerRuntime.IsLocalPlayer ? "本地玩家" : "等待中";
     }
 
     private NetworkGameStatePlayerPayload FindStatePlayer(int seatIndex)
@@ -387,16 +360,55 @@ public sealed class Game : UIScript
         PlayerRuntime localPlayer = _gameSession?.GetDisplayPlayerRuntime(0);
         if (localPlayer == null)
         {
+            RefreshCardLayout(_handLayout, ref _lastHandLayoutWidth);
             return;
         }
 
+        bool canSelectCards = CanLocalSelectCards();
         for (int index = 0; index < localPlayer.GameHandCardDefinitions.Count; index += 1)
         {
             CardDefinition cardDefinition = localPlayer.GameHandCardDefinitions[index];
             GameObject cardObject = OpenGameObject(_handAreaTransform, CardPrefabPath, $"hand_card_{index}");
-            BindCardObject(cardObject, cardDefinition, CanLocalSelectCards() ? OnClickHandCard : null, true);
-            ApplyCardSelectionVisual(cardObject, _selectedCardIds.Contains(cardDefinition.CardId), false);
+            BindCardObject(cardObject, cardDefinition, canSelectCards ? OnClickHandCard : null, true);
+            ApplyHandCardSelectionVisual(cardObject, canSelectCards && _selectedCardIds.Contains(cardDefinition.CardId));
         }
+        RefreshCardLayout(_handLayout, ref _lastHandLayoutWidth);
+    }
+
+    public override void OnTick(float deltaTime)
+    {
+        RenderShowdown();
+        if (_handAreaTransform != null
+            && !Mathf.Approximately(((RectTransform)_handAreaTransform).rect.width, _lastHandLayoutWidth))
+        {
+            RefreshCardLayout(_handLayout, ref _lastHandLayoutWidth);
+        }
+        if (_previewAreaTransform != null && _previewAreaTransform.gameObject.activeSelf
+            && !Mathf.Approximately(((RectTransform)_previewAreaTransform).rect.width, _lastPreviewLayoutWidth))
+        {
+            RefreshCardLayout(_previewLayout, ref _lastPreviewLayoutWidth);
+        }
+    }
+
+    private void RefreshCardLayout(HorizontalLayoutGroup layout, ref float lastWidth)
+    {
+        if (layout == null) return;
+
+        RectTransform container = (RectTransform)layout.transform;
+        lastWidth = container.rect.width;
+        float availableWidth = Mathf.Max(0f, container.rect.width - layout.padding.horizontal);
+        float totalCardWidth = 0f;
+        int count = 0;
+        foreach (RectTransform card in container)
+        {
+            // Destroy is deferred until the end of the frame; ignore old, disabled cards.
+            if (!card.gameObject.activeSelf) continue;
+            totalCardWidth += card.rect.width * card.localScale.x;
+            count++;
+        }
+
+        layout.spacing = count <= 1 ? 0f : Mathf.Min(0f, (availableWidth - totalCardWidth) / (count - 1));
+        LayoutRebuilder.ForceRebuildLayoutImmediate(container);
     }
 
     private void RenderPhasePanel()
@@ -404,12 +416,12 @@ public sealed class Game : UIScript
         RenderTimer();
         bool isPlaySelect = string.Equals(_gameSession?.Phase, "play_select", StringComparison.Ordinal);
         bool isChallengeSelect = string.Equals(_gameSession?.Phase, "challenge_select", StringComparison.Ordinal);
-        SetNodeActive(_previewAreaTransform, isPlaySelect);
+        bool isShowdown = _gameSession?.Phase == "showdown";
+        if (_previewLayout != null) _previewLayout.enabled = isPlaySelect;
+        SetNodeActive(_previewAreaTransform, isPlaySelect || isShowdown);
         SetNodeActive(_challengeTargetsTransform, isChallengeSelect);
-        SetNodeActive(_confirmButton, isPlaySelect);
+        SetNodeActive(_confirmButton, isPlaySelect && !IsLocalPlaySubmitted());
 
-        // These controls belong to the other action state. Keep their existing
-        // meaning and layout; only hide them while selecting cards.
         SetNodeActive(_catchButton, isChallengeSelect);
         SetNodeActive(_letgoButton, isChallengeSelect);
 
@@ -419,7 +431,7 @@ public sealed class Game : UIScript
         }
         else
         {
-            ClearChildren(_previewAreaTransform);
+            if (!isShowdown) ClearChildren(_previewAreaTransform);
             if (_confirmButton != null)
             {
                 _confirmButton.onClick.RemoveAllListeners();
@@ -451,24 +463,20 @@ public sealed class Game : UIScript
                 $"preview_{cardDefinition.CardId}");
             bool faceUp = string.Equals(cardDefinition.CardId, faceUpCardId, StringComparison.Ordinal);
             BindCardObject(cardObject, cardDefinition, submitted ? null : OnClickPreviewCard, faceUp);
-            ApplyCardSelectionVisual(cardObject, true, faceUp);
+            // Keep the hit area for choosing the face-up card, but never tint preview cards.
+            Button previewButton = FindRequiredChild(cardObject.transform, "btn").GetComponent<Button>();
+            previewButton.transition = Selectable.Transition.None;
+            previewButton.targetGraphic.color = Color.clear;
         }
+        RefreshCardLayout(_previewLayout, ref _lastPreviewLayoutWidth);
 
         string error = submitted ? string.Empty : GetPlaySelectionError(previewCards);
         _confirmButton.interactable = !submitted && string.IsNullOrEmpty(error);
     }
 
-    private void RenderChatPreview()
-    {
-        if (_chatPreviewText != null)
-        {
-            _chatPreviewText.text = _gameChatMessages.Count == 0 ? string.Empty : string.Join("\n", _gameChatMessages);
-        }
-    }
-
     private void OnClickHandCard(string cardId)
     {
-        if (string.IsNullOrEmpty(cardId))
+        if (!CanLocalSelectCards() || string.IsNullOrEmpty(cardId))
         {
             return;
         }
@@ -496,7 +504,7 @@ public sealed class Game : UIScript
 
     private void OnClickPreviewCard(string cardId)
     {
-        if (!_selectedCardIds.Contains(cardId))
+        if (!CanLocalSelectCards() || !_selectedCardIds.Contains(cardId))
         {
             return;
         }
@@ -507,6 +515,8 @@ public sealed class Game : UIScript
 
     private void OnClickConfirmPlayButton()
     {
+        if (!CanLocalSelectCards()) return;
+
         List<CardDefinition> selectedCards = GetSelectedCards();
         string error = GetPlaySelectionError(selectedCards);
         if (!string.IsNullOrEmpty(error))
@@ -519,21 +529,6 @@ public sealed class Game : UIScript
         if (controller != null)
         {
             controller.SubmitPlay(_selectedCardIds.ToArray(), _faceUpCardId);
-        }
-    }
-
-    private void OnClickSendChatButton()
-    {
-        string message = _chatInput == null ? string.Empty : _chatInput.text;
-        OnlineGameController controller = GameApp.Current?.OnlineGameController;
-        if (controller != null)
-        {
-            controller.SendGameChat(message);
-        }
-
-        if (_chatInput != null)
-        {
-            _chatInput.text = string.Empty;
         }
     }
 
@@ -691,11 +686,11 @@ public sealed class Game : UIScript
             : _cardArtLibrary?.BackSprite;
         if (sprite == null)
         {
-            Debug.LogError($"Card art is missing for '{cardDefinition.CardName}'. Rebuild prefabs and verify CardArtLibrary entries.");
+            throw new InvalidOperationException($"Card art is missing for '{cardDefinition.CardName}'.");
         }
 
         faceImage.sprite = sprite;
-        faceImage.color = sprite == null ? new Color32(248, 244, 230, 255) : Color.white;
+        faceImage.color = Color.white;
         faceImage.preserveAspect = true;
         Button cardButton = FindRequiredChild(cardObject.transform, "btn").GetComponent<Button>();
         cardButton.onClick.RemoveAllListeners();
@@ -707,20 +702,21 @@ public sealed class Game : UIScript
         }
     }
 
-    private void ApplyCardSelectionVisual(GameObject cardObject, bool selected, bool faceUp)
+    private void ApplyHandCardSelectionVisual(GameObject cardObject, bool selected)
     {
         Image buttonImage = FindRequiredChild(cardObject.transform, "btn").GetComponent<Image>();
-        buttonImage.color = faceUp
-            ? new Color32(255, 232, 150, 96)
-            : selected ? new Color32(255, 248, 220, 96) : new Color32(255, 255, 255, 0);
+        buttonImage.color = selected ? new Color32(255, 248, 220, 96) : Color.clear;
+
+        // Both rows leave root positioning to the layout group. Only selected hand
+        // cards lift their contents; preview cards remain aligned, including the face-up card.
+        if (!selected) return;
 
         RectTransform rectTransform = cardObject.GetComponent<RectTransform>();
-        if (rectTransform != null)
-        {
-            rectTransform.anchoredPosition = selected && !faceUp
-                ? new Vector2(rectTransform.anchoredPosition.x, 14f)
-                : new Vector2(rectTransform.anchoredPosition.x, 0f);
-        }
+        if (rectTransform == null) return;
+
+        // Called once for each freshly instantiated card, preserving prefab offsets.
+        foreach (RectTransform content in rectTransform)
+            content.anchoredPosition += Vector2.up * 14f;
     }
 
     private void ClearChildren(Transform parentTransform)
@@ -738,6 +734,7 @@ public sealed class Game : UIScript
 
         foreach (GameObject child in children)
         {
+            child.SetActive(false);
             UnityEngine.Object.Destroy(child);
         }
     }

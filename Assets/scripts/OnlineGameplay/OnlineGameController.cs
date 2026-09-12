@@ -1,5 +1,4 @@
 using System;
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -8,7 +7,6 @@ public sealed class OnlineGameController
 {
     private readonly LaunchConfig _gameLaunchConfig;
     private readonly WebSocketTransport _webSocketTransport = new WebSocketTransport();
-    private readonly GameSessionSynchronizer _gameSessionSynchronizer;
 
     private bool _helloSent;
     private CancellationTokenSource _startupCancellationTokenSource;
@@ -37,14 +35,7 @@ public sealed class OnlineGameController
     public OnlineGameController(LaunchConfig gameLaunchConfig)
     {
         _gameLaunchConfig = gameLaunchConfig ?? throw new ArgumentNullException(nameof(gameLaunchConfig));
-        GameSession.Initialize(new[]
-        {
-            new PlayerRuntime("player0", 0, false),
-            new PlayerRuntime("player1", 1, false),
-            new PlayerRuntime("player2", 2, false),
-            new PlayerRuntime("player3", 3, false)
-        });
-        _gameSessionSynchronizer = new GameSessionSynchronizer(GameSession);
+
     }
 
     public void Initialize()
@@ -264,30 +255,16 @@ public sealed class OnlineGameController
             "Failed to send game/submit_play.");
     }
 
-    public void SubmitChallenge(int targetSeatIndex)
+    public Task SubmitChallengeAsync(int targetSeatIndex)
     {
-        if (string.IsNullOrEmpty(GameSession.MatchId))
+        if (!IsConnected || string.IsNullOrEmpty(GameSession.MatchId))
         {
-            Debug.LogWarning("Cannot send game/submit_challenge because there is no active match id.");
-            return;
+            throw new InvalidOperationException("服务器连接已断开，请等待连接恢复。");
         }
 
-        FireAndForget(
-            SendTextAsync(NetworkProtocolMessages.SerializeSubmitChallengeRequest(GameSession.MatchId, targetSeatIndex)),
-            "Failed to send game/submit_challenge.");
-    }
-
-    public void SubmitFortuneDraw(int drawCount)
-    {
-        if (string.IsNullOrEmpty(GameSession.MatchId))
-        {
-            Debug.LogWarning("Cannot send game/submit_fortune_draw because there is no active match id.");
-            return;
-        }
-
-        FireAndForget(
-            SendTextAsync(NetworkProtocolMessages.SerializeSubmitFortuneDrawRequest(GameSession.MatchId, drawCount)),
-            "Failed to send game/submit_fortune_draw.");
+        // Do not reconnect here: this prototype replaces disconnected seats with AI.
+        return _webSocketTransport.SendTextAsync(
+            NetworkProtocolMessages.SerializeSubmitChallengeRequest(GameSession.MatchId, targetSeatIndex));
     }
 
     public void SendGameChat(string message)
@@ -320,6 +297,7 @@ public sealed class OnlineGameController
         FireAndForget(
             SendTextAsync(NetworkProtocolMessages.SerializeGameLeaveRequest(matchId)),
             "Failed to leave game.");
+        GameSession.Shutdown();
         MatchEnded?.Invoke();
         RequestRoomList();
     }
@@ -596,7 +574,7 @@ public sealed class OnlineGameController
             return;
         }
 
-        _gameSessionSynchronizer.ApplyMatchStart(message.payload);
+        GameSession.ApplyMatchStart(message.payload.match_id);
         MatchStarted?.Invoke();
         RoomModel.Clear();
     }
@@ -610,7 +588,10 @@ public sealed class OnlineGameController
             return;
         }
 
-        _gameSessionSynchronizer.ApplyGameState(message.payload);
+        // Queued snapshots from a departed match must not restore its state.
+        if (string.IsNullOrEmpty(GameSession.MatchId)
+            || !string.Equals(GameSession.MatchId, message.payload.match_id, StringComparison.Ordinal)) return;
+        GameSession.ApplyGameState(message.payload);
     }
 
     private void HandleGameChat(string rawMessage)

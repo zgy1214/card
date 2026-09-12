@@ -1,27 +1,23 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import random
 import time
 import uuid
 
 from .models import Card, MATCH_STATUS_FINISHED, MATCH_STATUS_PLAYING, PLAYER_TYPE_AI, PlayerState, RoomPlayer
 
-
 CARD_SUITS = ("spade", "heart", "club", "diamond")
 PHASE_PLAY_SELECT = "play_select"
 PHASE_CHALLENGE_SELECT = "challenge_select"
 PHASE_SHOWDOWN = "showdown"
-PHASE_FORTUNE_DRAW = "fortune_draw"
 PHASE_FINAL_RESULT = "final_result"
-
 
 class GameRuleError(Exception):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
-
 
 @dataclass(frozen=True)
 class PlaySubmission:
@@ -41,7 +37,6 @@ class PlaySubmission:
     def declaration(self) -> str:
         return f"{len(self.cards)}张{self.face_up_card.rank}"
 
-
 @dataclass
 class ShowdownEvent:
     target_seat_index: int
@@ -49,26 +44,8 @@ class ShowdownEvent:
     success: bool
     revealed_cards: list[Card]
     fortune_deltas: dict[int, int]
-    message: str
-
-
-@dataclass
-class FortuneDraw:
-    draw_count: int
-    result_tokens: list[str]
-
-
-@dataclass
-class FinalResult:
-    seat_index: int
-    player_id: str
-    name: str
-    effective_bad_fortune: int
-    final_fortune: int
-    escaped_three_count: int
-    title: str
-    rank: int = 1
-
+    fortune_before: list[dict[str, int]]
+    fortune_after: list[dict[str, int]]
 
 class GameSession:
     initial_hand_count = 6
@@ -77,11 +54,11 @@ class GameSession:
     max_round = 3
     play_select_duration_seconds = 20
     challenge_select_duration_seconds = 20
-    showdown_duration_seconds = 10
-    no_challenge_showdown_seconds = 5
-    fortune_draw_duration_seconds = 30
-    fortune_draw_min_count = 2
-    fortune_draw_max_count = 5
+    showdown_overview_seconds = 2.0
+    showdown_focus_seconds = 1.2
+    showdown_reveal_seconds = 1.6
+    showdown_reward_seconds = 1.8
+    settlement_delay_seconds = 3.0
     initial_bad_fortune_count = 4
     fortune_pool_size = 8
     ai_challenge_probability = 0.55
@@ -112,11 +89,7 @@ class GameSession:
         self.challenge_submissions: dict[int, int] = {}
         self.showdown_events: list[ShowdownEvent] = []
         self.successful_escaped_threes: dict[int, int] = {player.seat_index: 0 for player in self.players}
-        self.escaped_three_history: list[int] = []
-        self.retained_threes: dict[int, int] = {player.seat_index: 0 for player in self.players}
         self.fortune_pools: dict[int, list[str]] = {}
-        self.fortune_draws: dict[int, FortuneDraw] = {}
-        self.final_results: list[FinalResult] = []
         self._deck: list[Card] = []
 
     @property
@@ -186,38 +159,21 @@ class GameSession:
         if self._all_players_submitted(self.challenge_submissions):
             self._resolve_challenges()
 
-    def submit_fortune_draw(self, match_id: str, player_id: str, draw_count: int) -> None:
-        self._validate_match_is_active()
-        self._validate_match_id(match_id)
-        if self.phase != PHASE_FORTUNE_DRAW:
-            raise GameRuleError("invalid_phase", "Fortune can only be drawn during fortune_draw.")
-
-        player = self._require_player_by_id(player_id)
-        self._draw_fortune_for_player(player.seat_index, draw_count)
-        if self._all_players_submitted(self.fortune_draws):
-            self._finish_with_final_results()
-
     def handle_phase_timeout(self, expected_phase: str, expected_round: int) -> None:
         if self.phase != expected_phase or self.round_index != expected_round or not self.is_playing:
             return
 
         if self.phase == PHASE_PLAY_SELECT:
-            self._auto_submit_missing_plays()
             self._enter_challenge_phase()
             return
 
         if self.phase == PHASE_CHALLENGE_SELECT:
-            self._auto_submit_missing_challenges()
             self._resolve_challenges()
             return
 
         if self.phase == PHASE_SHOWDOWN:
             self._advance_after_showdown()
             return
-
-        if self.phase == PHASE_FORTUNE_DRAW:
-            self._auto_submit_missing_fortune_draws()
-            self._finish_with_final_results()
 
     def replace_player_with_ai(self, player_id: str) -> tuple[int, str] | None:
         player = self.get_player_by_id(player_id)
@@ -230,8 +186,6 @@ class GameSession:
             self._auto_submit_play(player)
         if self.phase == PHASE_CHALLENGE_SELECT and player.seat_index not in self.challenge_submissions:
             self.challenge_submissions[player.seat_index] = self._choose_ai_challenge_target(player.seat_index)
-        if self.phase == PHASE_FORTUNE_DRAW and player.seat_index not in self.fortune_draws:
-            self._draw_fortune_for_player(player.seat_index, self.fortune_draw_min_count)
         self._advance_if_current_phase_ready()
         return player.seat_index, ai_player_id
 
@@ -247,9 +201,9 @@ class GameSession:
         if self.phase == PHASE_CHALLENGE_SELECT:
             return float(self.challenge_select_duration_seconds)
         if self.phase == PHASE_SHOWDOWN:
-            return float(self.no_challenge_showdown_seconds if not self.showdown_events else self.showdown_duration_seconds)
-        if self.phase == PHASE_FORTUNE_DRAW:
-            return float(self.fortune_draw_duration_seconds)
+            return self.showdown_overview_seconds + len(self.showdown_events) * (
+                self.showdown_focus_seconds + self.showdown_reveal_seconds + self.showdown_reward_seconds
+            ) + (self.settlement_delay_seconds if self.round_index >= self.max_round else 0.0)
         return 0.0
 
     def to_match_start_payload(self) -> dict[str, object]:
@@ -266,11 +220,8 @@ class GameSession:
             "phase_end_time": self.phase_end_time,
             "players": [self._player_public_payload(player) for player in self.players],
             "local_player_private": self._private_payload(receiver) if receiver else {},
-            "round_public": self._round_public_payload(),
             "challenge_state": self._challenge_state_payload(receiver),
             "showdown_state": self._showdown_state_payload(),
-            "fortune_state": self._fortune_state_payload(receiver),
-            "final_result": self._final_result_payload(),
         }
 
     def to_player_replaced_by_ai_payload(self, seat_index: int, player_id: str, ai_player_id: str) -> dict[str, object]:
@@ -295,9 +246,6 @@ class GameSession:
             self._resolve_challenges()
             return
 
-        if self.phase == PHASE_FORTUNE_DRAW and self._all_players_submitted(self.fortune_draws):
-            self._finish_with_final_results()
-
     def _resolve_challenges(self) -> None:
         self._auto_submit_missing_challenges()
         self.showdown_events = []
@@ -311,6 +259,7 @@ class GameSession:
             challengers = sorted(challenge_by_target[target_seat_index])
             submission = self.play_submissions[target_seat_index]
             success = any(card.rank == 3 for card in submission.cards)
+            fortune_before = self._fortune_counts_payload()
             deltas = self._apply_challenge_reward(target_seat_index, challengers, success)
             self.showdown_events.append(
                 ShowdownEvent(
@@ -319,20 +268,17 @@ class GameSession:
                     success=success,
                     revealed_cards=submission.hidden_cards,
                     fortune_deltas=deltas,
-                    message=self._build_showdown_message(target_seat_index, challengers, success),
+                    fortune_before=fortune_before,
+                    fortune_after=self._fortune_counts_payload(),
                 )
             )
 
         challenged_targets = set(challenge_by_target)
-        round_escaped_threes = 0
         for seat_index, submission in self.play_submissions.items():
             if seat_index in challenged_targets:
                 continue
-            escaped_threes = sum(1 for card in submission.hidden_cards if card.rank == 3)
+            escaped_threes = sum(1 for card in submission.cards if card.rank == 3)
             self.successful_escaped_threes[seat_index] += escaped_threes
-            round_escaped_threes += escaped_threes
-
-        self.escaped_three_history.append(round_escaped_threes)
 
         self._enter_phase(PHASE_SHOWDOWN)
 
@@ -346,46 +292,6 @@ class GameSession:
             self._enter_phase(PHASE_PLAY_SELECT)
             return
 
-        self._count_retained_threes()
-        self.play_submissions.clear()
-        self.challenge_submissions.clear()
-        self._enter_phase(PHASE_FORTUNE_DRAW)
-
-    def _finish_with_final_results(self) -> None:
-        self._auto_submit_missing_fortune_draws()
-        results: list[FinalResult] = []
-        for player in self.players:
-            draw = self.fortune_draws[player.seat_index]
-            bad = sum(1 for token in draw.result_tokens if token == "bad")
-            good = sum(1 for token in draw.result_tokens if token == "good")
-            bad += self.retained_threes[player.seat_index]
-            escaped = self.successful_escaped_threes[player.seat_index]
-            canceled = min(bad, escaped)
-            effective_bad = bad - canceled
-            final_fortune = good + max(0, escaped - canceled)
-            results.append(
-                FinalResult(
-                    seat_index=player.seat_index,
-                    player_id=player.player_id,
-                    name=player.name,
-                    effective_bad_fortune=effective_bad,
-                    final_fortune=final_fortune,
-                    escaped_three_count=escaped,
-                    title=self._title_for_result(effective_bad, final_fortune),
-                )
-            )
-
-        results.sort(key=lambda item: (item.effective_bad_fortune, -item.final_fortune, -item.escaped_three_count, item.seat_index))
-        previous_key: tuple[int, int, int] | None = None
-        previous_rank = 0
-        for index, result in enumerate(results, start=1):
-            key = (result.effective_bad_fortune, result.final_fortune, result.escaped_three_count)
-            if key != previous_key:
-                previous_rank = index
-                previous_key = key
-            result.rank = previous_rank
-
-        self.final_results = results
         self.match_status = MATCH_STATUS_FINISHED
         self._enter_phase(PHASE_FINAL_RESULT)
 
@@ -541,22 +447,6 @@ class GameSession:
 
         return suspicion
 
-    def _auto_submit_missing_fortune_draws(self) -> None:
-        for player in self.players:
-            if player.seat_index not in self.fortune_draws:
-                self._draw_fortune_for_player(player.seat_index, self.fortune_draw_min_count)
-
-    def _draw_fortune_for_player(self, seat_index: int, draw_count: int) -> None:
-        if seat_index in self.fortune_draws:
-            raise GameRuleError("already_submitted", "This player has already drawn fortune.")
-
-        if draw_count < self.fortune_draw_min_count or draw_count > self.fortune_draw_max_count:
-            raise GameRuleError("invalid_operation", "Fortune draw count is out of range.")
-
-        pool = list(self.fortune_pools[seat_index])
-        self._rng.shuffle(pool)
-        self.fortune_draws[seat_index] = FortuneDraw(draw_count=draw_count, result_tokens=pool[:draw_count])
-
     def _apply_challenge_reward(self, target_seat_index: int, challengers: list[int], success: bool) -> dict[int, int]:
         deltas: dict[int, int] = {}
         challenger_count = len(challengers)
@@ -598,10 +488,6 @@ class GameSession:
             changed -= 1
         return changed
 
-    def _count_retained_threes(self) -> None:
-        for player in self.players:
-            self.retained_threes[player.seat_index] = sum(1 for card in player.hand_cards if card.rank == 3)
-
     def _remove_cards_from_hand(self, player: PlayerState, card_ids: list[str]) -> list[Card]:
         if not card_ids:
             raise GameRuleError("invalid_operation", "At least one card is required.")
@@ -630,6 +516,7 @@ class GameSession:
 
     def _player_public_payload(self, player: PlayerState) -> dict[str, object]:
         submission = self.play_submissions.get(player.seat_index)
+        pool = self.fortune_pools[player.seat_index]
         return {
             "seat_index": player.seat_index,
             "player_id": player.player_id,
@@ -637,9 +524,11 @@ class GameSession:
             "player_type": player.player_type,
             "character_id": player.character_id,
             "hand_count": player.hand_count,
+            "lucky_count": pool.count("good"),
+            "unlucky_count": pool.count("bad"),
+            "escaped_three_count": self.successful_escaped_threes[player.seat_index],
             "play_submitted": submission is not None,
             "challenge_submitted": player.seat_index in self.challenge_submissions,
-            "fortune_draw_submitted": player.seat_index in self.fortune_draws,
             "public_play": self._public_play_payload(submission),
         }
 
@@ -659,15 +548,9 @@ class GameSession:
         if player is None:
             return {}
 
-        draw = self.fortune_draws.get(player.seat_index)
         return {
             "seat_index": player.seat_index,
             "hand_cards": [card.to_payload() for card in player.hand_cards],
-            "fortune_pool": list(self.fortune_pools.get(player.seat_index, [])),
-            "fortune_draw": {
-                "draw_count": draw.draw_count,
-                "result_tokens": list(draw.result_tokens),
-            } if draw else {},
             "submitted_play": self._submitted_play_private_payload(self.play_submissions.get(player.seat_index)),
         }
 
@@ -681,20 +564,6 @@ class GameSession:
             "cards": [card.to_payload() for card in submission.cards],
         }
 
-    def _round_public_payload(self) -> dict[str, object]:
-        submissions = list(self.play_submissions.values())
-        rank_counts: dict[int, int] = {}
-        for submission in submissions:
-            for card in submission.cards:
-                rank_counts[card.rank] = rank_counts.get(card.rank, 0) + 1
-
-        pair_count = sum(1 for count in rank_counts.values() if count >= 2)
-        return {
-            "pair_count": pair_count,
-            "pair_contains_three_count": rank_counts.get(3, 0) if rank_counts.get(3, 0) >= 2 else 0,
-            "escaped_three_history": list(self.escaped_three_history),
-        }
-
     def _challenge_state_payload(self, receiver: PlayerState | None) -> dict[str, object]:
         own_target = self.challenge_submissions.get(receiver.seat_index, None) if receiver else None
         return {
@@ -703,7 +572,14 @@ class GameSession:
         }
 
     def _showdown_state_payload(self) -> dict[str, object]:
+        if self.phase != PHASE_SHOWDOWN:
+            return {}
         return {
+            "started_at": self.phase_end_time - self.current_phase_delay_seconds(),
+            "overview_seconds": self.showdown_overview_seconds,
+            "focus_seconds": self.showdown_focus_seconds,
+            "reveal_seconds": self.showdown_reveal_seconds,
+            "reward_seconds": self.showdown_reward_seconds,
             "events": [
                 {
                     "target_seat_index": event.target_seat_index,
@@ -717,57 +593,20 @@ class GameSession:
                         }
                         for seat, delta in sorted(event.fortune_deltas.items())
                     ],
-                    "message": event.message,
+                    "fortune_before": event.fortune_before,
+                    "fortune_after": event.fortune_after,
                 }
                 for event in self.showdown_events
             ],
         }
 
-    def _fortune_state_payload(self, receiver: PlayerState | None) -> dict[str, object]:
-        return {
-            "min_draw_count": self.fortune_draw_min_count,
-            "max_draw_count": self.fortune_draw_max_count,
-            "submitted_seat_indexes": sorted(self.fortune_draws),
-            "own_submitted": receiver is not None and receiver.seat_index in self.fortune_draws,
-        }
-
-    def _final_result_payload(self) -> dict[str, object]:
-        return {
-            "results": [
-                {
-                    "rank": result.rank,
-                    "seat_index": result.seat_index,
-                    "player_id": result.player_id,
-                    "name": result.name,
-                    "effective_bad_fortune": result.effective_bad_fortune,
-                    "final_fortune": result.final_fortune,
-                    "escaped_three_count": result.escaped_three_count,
-                    "title": result.title,
-                }
-                for result in self.final_results
-            ]
-        }
-
-    def _build_showdown_message(self, target_seat_index: int, challengers: list[int], success: bool) -> str:
-        result_text = "质疑成功" if success else "质疑失败"
-        return f"{len(challengers)}人质疑座位{target_seat_index + 1}，{result_text}"
-
-    def _title_for_result(self, effective_bad: int, final_fortune: int) -> str:
-        if effective_bad == 0 and final_fortune >= 7:
-            return "鸿运当头"
-        if effective_bad == 0 and final_fortune == 6:
-            return "六六大顺"
-        if effective_bad == 0 and final_fortune == 5:
-            return "五福临门"
-        if effective_bad == 0 and final_fortune == 4:
-            return "四季平安"
-        if effective_bad == 0 and final_fortune == 3:
-            return "三阳开泰"
-        if effective_bad == 1:
-            return "小有波折"
-        if effective_bad == 2:
-            return "霉运缠身"
-        return "诸事不顺"
+    def _fortune_counts_payload(self) -> list[dict[str, int]]:
+        return [
+            {"seat_index": player.seat_index,
+             "lucky_count": self.fortune_pools[player.seat_index].count("good"),
+             "unlucky_count": self.fortune_pools[player.seat_index].count("bad")}
+            for player in self.players
+        ]
 
     def _initial_fortune_pool(self) -> list[str]:
         bad_count = self.initial_bad_fortune_count

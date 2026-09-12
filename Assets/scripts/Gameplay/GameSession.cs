@@ -19,43 +19,14 @@ public sealed class GameSession
     public double ServerTime { get; private set; }
     public double PhaseEndTime { get; private set; }
     public double StateReceivedRealtime { get; private set; }
-    public NetworkGameStatePlayerPayload[] GameStatePlayers { get; private set; }
+    public NetworkGameStatePlayerPayload[] GameStatePlayers { get; private set; } = Array.Empty<NetworkGameStatePlayerPayload>();
     public NetworkLocalPlayerPrivatePayload LocalPlayerPrivate { get; private set; }
-    public NetworkRoundPublicPayload RoundPublic { get; private set; }
     public NetworkChallengeStatePayload ChallengeState { get; private set; }
     public NetworkShowdownStatePayload ShowdownState { get; private set; }
-    public NetworkFortuneStatePayload FortuneState { get; private set; }
-    public NetworkFinalResultPayload FinalResult { get; private set; }
 
     public event Action GameStarted;
     public event Action MatchStateUpdated;
     public event Action PhaseTimerTicked;
-
-    public void Initialize(IEnumerable<PlayerRuntime> gamePlayerRuntimes)
-    {
-        if (gamePlayerRuntimes == null)
-        {
-            throw new ArgumentNullException(nameof(gamePlayerRuntimes));
-        }
-
-        _gamePlayerRuntimes.Clear();
-        foreach (PlayerRuntime gamePlayerRuntime in gamePlayerRuntimes)
-        {
-            if (gamePlayerRuntime == null)
-            {
-                throw new ArgumentException("Player runtime cannot be null.", nameof(gamePlayerRuntimes));
-            }
-
-            _gamePlayerRuntimes.Add(gamePlayerRuntime);
-        }
-
-        if (_gamePlayerRuntimes.Count == 0)
-        {
-            throw new ArgumentException("At least one player runtime is required.", nameof(gamePlayerRuntimes));
-        }
-
-        ResetMatchState();
-    }
 
     public void Shutdown()
     {
@@ -106,11 +77,10 @@ public sealed class GameSession
             throw new ArgumentException("Match id cannot be null or empty.", nameof(matchId));
         }
 
-        foreach (PlayerRuntime gamePlayerRuntime in _gamePlayerRuntimes)
-        {
-            gamePlayerRuntime.ClearHandCards();
-        }
-
+        // Match start and the first state snapshot can arrive on different frames.
+        // Clear the previous match before notifying views about the new one.
+        ResetMatchState();
+        _gamePlayerRuntimes.Clear();
         MatchId = matchId;
         MatchStatus = "playing";
         IsRunning = true;
@@ -124,6 +94,16 @@ public sealed class GameSession
             throw new ArgumentNullException(nameof(networkGameStatePayload));
         }
 
+        if (networkGameStatePayload.phase == "showdown")
+        {
+            NetworkShowdownStatePayload showdown = networkGameStatePayload.showdown_state;
+            if (showdown == null || showdown.events == null
+                || !IsPositiveFinite(showdown.started_at) || !IsPositiveFinite(networkGameStatePayload.server_time)
+                || !IsPositiveFinite(showdown.overview_seconds) || !IsPositiveFinite(showdown.focus_seconds)
+                || !IsPositiveFinite(showdown.reveal_seconds) || !IsPositiveFinite(showdown.reward_seconds))
+                throw new ArgumentException("Showdown state does not match the current protocol.", nameof(networkGameStatePayload));
+        }
+
         MatchId = networkGameStatePayload.match_id;
         MatchStatus = networkGameStatePayload.match_status;
         Phase = networkGameStatePayload.phase;
@@ -134,11 +114,8 @@ public sealed class GameSession
         _phaseTimerElapsedTime = 0f;
         GameStatePlayers = networkGameStatePayload.players ?? Array.Empty<NetworkGameStatePlayerPayload>();
         LocalPlayerPrivate = networkGameStatePayload.local_player_private;
-        RoundPublic = networkGameStatePayload.round_public;
         ChallengeState = networkGameStatePayload.challenge_state;
         ShowdownState = networkGameStatePayload.showdown_state;
-        FortuneState = networkGameStatePayload.fortune_state;
-        FinalResult = networkGameStatePayload.final_result;
 
         SynchronizeGameStatePlayers(GameStatePlayers, LocalPlayerPrivate);
         IsRunning = !IsFinished;
@@ -246,11 +223,8 @@ public sealed class GameSession
         _phaseTimerElapsedTime = 0f;
         GameStatePlayers = Array.Empty<NetworkGameStatePlayerPayload>();
         LocalPlayerPrivate = null;
-        RoundPublic = null;
         ChallengeState = null;
         ShowdownState = null;
-        FortuneState = null;
-        FinalResult = null;
         IsRunning = false;
         LocalSeatIndex = -1;
         foreach (PlayerRuntime gamePlayerRuntime in _gamePlayerRuntimes)
@@ -258,4 +232,6 @@ public sealed class GameSession
             gamePlayerRuntime.ClearHandCards();
         }
     }
+
+    private static bool IsPositiveFinite(double value) => value > 0 && !double.IsNaN(value) && !double.IsInfinity(value);
 }

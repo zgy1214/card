@@ -281,20 +281,6 @@ public sealed class NetworkSubmitChallengeRequestPayload
 }
 
 [Serializable]
-public sealed class NetworkSubmitFortuneDrawRequestMessage
-{
-    public string type = NetworkProtocolMessages.GameSubmitFortuneDraw;
-    public NetworkSubmitFortuneDrawRequestPayload payload;
-}
-
-[Serializable]
-public sealed class NetworkSubmitFortuneDrawRequestPayload
-{
-    public string match_id;
-    public int draw_count;
-}
-
-[Serializable]
 public sealed class NetworkGameChatRequestMessage
 {
     public string type = NetworkProtocolMessages.GameChat;
@@ -369,11 +355,8 @@ public sealed class NetworkGameStatePayload
     public double phase_end_time;
     public NetworkGameStatePlayerPayload[] players;
     public NetworkLocalPlayerPrivatePayload local_player_private;
-    public NetworkRoundPublicPayload round_public;
     public NetworkChallengeStatePayload challenge_state;
     public NetworkShowdownStatePayload showdown_state;
-    public NetworkFortuneStatePayload fortune_state;
-    public NetworkFinalResultPayload final_result;
 }
 
 [Serializable]
@@ -385,9 +368,11 @@ public sealed class NetworkGameStatePlayerPayload
     public string player_type;
     public string character_id;
     public int hand_count;
+    public int lucky_count;
+    public int unlucky_count;
+    public int escaped_three_count;
     public bool play_submitted;
     public bool challenge_submitted;
-    public bool fortune_draw_submitted;
     public NetworkPublicPlayPayload public_play;
 }
 
@@ -411,8 +396,6 @@ public sealed class NetworkLocalPlayerPrivatePayload
 {
     public int seat_index;
     public NetworkCardPayload[] hand_cards;
-    public string[] fortune_pool;
-    public NetworkFortuneDrawPayload fortune_draw;
     public NetworkSubmittedPlayPayload submitted_play;
 }
 
@@ -425,14 +408,6 @@ public sealed class NetworkSubmittedPlayPayload
 }
 
 [Serializable]
-public sealed class NetworkRoundPublicPayload
-{
-    public int pair_count;
-    public int pair_contains_three_count;
-    public int[] escaped_three_history;
-}
-
-[Serializable]
 public sealed class NetworkChallengeStatePayload
 {
     public int[] submitted_seat_indexes;
@@ -442,6 +417,11 @@ public sealed class NetworkChallengeStatePayload
 [Serializable]
 public sealed class NetworkShowdownStatePayload
 {
+    public double started_at;
+    public float overview_seconds;
+    public float focus_seconds;
+    public float reveal_seconds;
+    public float reward_seconds;
     public NetworkShowdownEventPayload[] events;
 }
 
@@ -453,7 +433,16 @@ public sealed class NetworkShowdownEventPayload
     public bool success;
     public NetworkCardPayload[] revealed_cards;
     public NetworkFortuneDeltaPayload[] fortune_deltas;
-    public string message;
+    public NetworkFortuneCountsPayload[] fortune_before;
+    public NetworkFortuneCountsPayload[] fortune_after;
+}
+
+[Serializable]
+public sealed class NetworkFortuneCountsPayload
+{
+    public int seat_index;
+    public int lucky_count;
+    public int unlucky_count;
 }
 
 [Serializable]
@@ -461,41 +450,6 @@ public sealed class NetworkFortuneDeltaPayload
 {
     public int seat_index;
     public int delta;
-}
-
-[Serializable]
-public sealed class NetworkFortuneStatePayload
-{
-    public int min_draw_count;
-    public int max_draw_count;
-    public int[] submitted_seat_indexes;
-    public bool own_submitted;
-}
-
-[Serializable]
-public sealed class NetworkFortuneDrawPayload
-{
-    public int draw_count;
-    public string[] result_tokens;
-}
-
-[Serializable]
-public sealed class NetworkFinalResultPayload
-{
-    public NetworkFinalResultRowPayload[] results;
-}
-
-[Serializable]
-public sealed class NetworkFinalResultRowPayload
-{
-    public int rank;
-    public int seat_index;
-    public string player_id;
-    public string name;
-    public int effective_bad_fortune;
-    public int final_fortune;
-    public int escaped_three_count;
-    public string title;
 }
 
 [Serializable]
@@ -574,7 +528,6 @@ public static class NetworkProtocolMessages
     public const string MatchmakingFound = "matchmaking/found";
     public const string GameSubmitPlay = "game/submit_play";
     public const string GameSubmitChallenge = "game/submit_challenge";
-    public const string GameSubmitFortuneDraw = "game/submit_fortune_draw";
     public const string GameChat = "game/chat";
     public const string GameState = "game/state";
     public const string GameLeave = "game/leave";
@@ -724,18 +677,6 @@ public static class NetworkProtocolMessages
             {
                 match_id = matchId,
                 target_seat_index = targetSeatIndex
-            }
-        });
-    }
-
-    public static string SerializeSubmitFortuneDrawRequest(string matchId, int drawCount)
-    {
-        return JsonUtility.ToJson(new NetworkSubmitFortuneDrawRequestMessage
-        {
-            payload = new NetworkSubmitFortuneDrawRequestPayload
-            {
-                match_id = matchId,
-                draw_count = drawCount
             }
         });
     }

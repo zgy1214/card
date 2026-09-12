@@ -23,9 +23,6 @@ def parse_client_message(raw_message: str) -> tuple[str, dict[str, Any]]:
     if not isinstance(message_type, str) or not message_type:
         raise ProtocolError("invalid_operation", "Client message type is required.")
 
-    if payload is None:
-        payload = {}
-
     if not isinstance(payload, dict):
         raise ProtocolError("invalid_operation", "Client message payload must be a JSON object.")
 

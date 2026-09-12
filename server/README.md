@@ -14,8 +14,15 @@ Current scope:
 - FIFO matchmaking for 3 human players
 - room-created matches with optional AI seats
 - authoritative turn flow
+- three rounds of play, challenge and showdown; a 3-second pause after the last showdown, then settlement
+- settlement shows final lucky/unlucky counts and escaped threes; ranking, score and title rules remain unspecified
 - server-side timeout and bot auto-play
 - game leave/disconnect replacement by AI
+
+Client and server use the same current protocol. Legacy fortune draw, random scoring,
+unused round statistics and old-payload compatibility have been removed.
+
+Run regression checks from `server/` with `python -m unittest discover -s tests -v`.
 
 ## Structure
 

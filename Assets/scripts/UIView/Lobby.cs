@@ -65,12 +65,12 @@ public sealed class Lobby : UIScript
         _playerNameInput.onEndEdit.AddListener(OnNameEditEnded);
         _previousCharacterButton.onClick.AddListener(OnClickPreviousCharacter);
         _nextCharacterButton.onClick.AddListener(OnClickNextCharacter);
-        _joinRoomButton.onClick.AddListener(OnClickJoinRoom);
+        _joinRoomButton.interactable = false;
         _createRoomButton.onClick.AddListener(OnClickCreateRoom);
         _matchmakingButton.onClick.AddListener(OnClickMatchmaking);
-        _rulesButton.onClick.AddListener(OnClickRules);
-        _helpButton.onClick.AddListener(OnClickHelp);
-        _settingsButton.onClick.AddListener(OnClickSettings);
+        _rulesButton.interactable = false;
+        _helpButton.interactable = false;
+        _settingsButton.interactable = false;
     }
 
     private void SubscribeEvents()
@@ -224,14 +224,10 @@ public sealed class Lobby : UIScript
         GameApp.Current?.OnlineGameController?.StartMatchmaking();
     }
 
-    private void OnClickJoinRoom() => Debug.Log("TODO: open join room dialog.");
     private void OnClickCreateRoom()
     {
         GameApp.Current?.OnlineGameController?.CreateRoom(string.Empty);
     }
-    private void OnClickRules() => Debug.Log("TODO: open rules dialog.");
-    private void OnClickHelp() => Debug.Log("TODO: open help dialog.");
-    private void OnClickSettings() => Debug.Log("TODO: open settings dialog.");
 
     private void ShowBlockingOverlay(MatchmakingSnapshot matchmakingState)
     {
@@ -275,12 +271,8 @@ public sealed class Lobby : UIScript
         _playerNameInput?.onEndEdit.RemoveListener(OnNameEditEnded);
         _previousCharacterButton?.onClick.RemoveListener(OnClickPreviousCharacter);
         _nextCharacterButton?.onClick.RemoveListener(OnClickNextCharacter);
-        _joinRoomButton?.onClick.RemoveListener(OnClickJoinRoom);
         _createRoomButton?.onClick.RemoveListener(OnClickCreateRoom);
         _matchmakingButton?.onClick.RemoveListener(OnClickMatchmaking);
-        _rulesButton?.onClick.RemoveListener(OnClickRules);
-        _helpButton?.onClick.RemoveListener(OnClickHelp);
-        _settingsButton?.onClick.RemoveListener(OnClickSettings);
     }
 
     private void ClearReferences()

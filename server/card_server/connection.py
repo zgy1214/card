@@ -150,14 +150,6 @@ class ClientConnection:
             )
             return
 
-        if message_type == "game/submit_fortune_draw":
-            await self._server_context.submit_fortune_draw(
-                self.player_id,
-                self._require_string(payload, "match_id"),
-                self._require_int(payload, "draw_count"),
-            )
-            return
-
         if message_type == "game/chat":
             await self._server_context.send_game_chat(
                 self.player_id,
@@ -195,7 +187,7 @@ class ClientConnection:
 
     def _require_int(self, payload: dict[str, Any], field_name: str) -> int:
         value = payload.get(field_name)
-        if not isinstance(value, int):
+        if type(value) is not int:
             raise ProtocolError("invalid_operation", f"'{field_name}' must be an integer.")
 
         return value

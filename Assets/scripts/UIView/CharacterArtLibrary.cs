@@ -29,6 +29,9 @@ public sealed class CharacterArtLibrary : MonoBehaviour
         return GetEntry(characterId)?.RoomScale ?? 1f;
     }
 
+    public Sprite GetRoomShadowSprite(string characterId) => GetEntry(characterId)?.RoomShadowSprite;
+    public Vector2 GetRoomShadowOffset(string characterId) => GetEntry(characterId)?.RoomShadowOffset ?? Vector2.zero;
+
     public Vector2 GetGameOffset(string characterId)
     {
         return GetEntry(characterId)?.GameOffset ?? Vector2.zero;
@@ -70,6 +73,8 @@ public sealed class CharacterArtEntry
     [SerializeField] private SkeletonDataAsset _skeletonDataAsset;
     [SerializeField] private Vector2 _roomOffset;
     [SerializeField] private float _roomScale = 1f;
+    [SerializeField] private Sprite _roomShadowSprite;
+    [SerializeField] private Vector2 _roomShadowOffset;
     [SerializeField] private Vector2 _gameOffset;
     [SerializeField] private float _gameScale = 1f;
 
@@ -78,6 +83,8 @@ public sealed class CharacterArtEntry
     public SkeletonDataAsset SkeletonDataAsset => _skeletonDataAsset;
     public Vector2 RoomOffset => _roomOffset;
     public float RoomScale => _roomScale > 0f ? _roomScale : 1f;
+    public Sprite RoomShadowSprite => _roomShadowSprite;
+    public Vector2 RoomShadowOffset => _roomShadowOffset;
     public Vector2 GameOffset => _gameOffset;
     public float GameScale => _gameScale > 0f ? _gameScale : 1f;
 
